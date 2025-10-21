@@ -1,0 +1,78 @@
+select
+union
+insert
+update
+delete
+drop
+create
+alter
+exec
+execute
+declare
+cast
+convert
+having
+group by
+order by
+where
+from
+join
+inner
+outer
+left
+right
+concat
+substring
+ascii
+char
+hex
+unhex
+sleep
+benchmark
+waitfor
+delay
+information_schema
+sysobjects
+syscolumns
+msysobjects
+msyscolumns
+pg_sleep
+pg_tables
+mysql.user
+load_file
+into outfile
+into dumpfile
+xp_cmdshell
+sp_executesql
+openrowset
+openquery
+char(
+chr(
+version()
+@@version
+user()
+current_user
+database()
+schema()
+table_name
+column_name
+'or'
+"or"
+' or 1=1
+" or 1=1
+' union select
+" union select
+1' and
+1" and
+admin'--
+admin"--
+' having
+" having
+extractvalue
+updatexml
+geometrycollection
+multipoint
+polygon
+multipolygon
+linestring
+multilinestring
