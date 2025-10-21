@@ -14,10 +14,10 @@ Automated reconnaissance tool that fetches archived URLs using Waymore and perfo
 ## Requirements
 
 ```bash
-pip install requests PyJWT waymore
+pip install requests jwt
 ```
 
-**Note:** This tool uses [Waymore](https://github.com/xnl-h4ck3r/waymore) behind the scenes to fetch archived URLs from multiple sources including Wayback Machine, Common Crawl, and VirusTotal.
+**Note:** This tool requires and uses [Waymore](https://github.com/xnl-h4ck3r/waymore) behind the scenes to fetch archived URLs from multiple sources including Wayback Machine, Common Crawl, and VirusTotal.
 
 ## Usage
 
