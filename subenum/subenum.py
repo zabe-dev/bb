@@ -8,8 +8,8 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 VERSION = "1.0"
@@ -206,7 +206,7 @@ def run_shuffledns(domain, resolvers, wordlist, output_file):
            "-mode", "bruteforce", "-silent", "-o", output_file]
     return run_command(cmd, output_file, "Running shuffledns...", timeout=3600)
 
-def run_port_scan(domains_file, resolvers, output_file):
+def run_port_scan(domains_file, resolvers, output_file, width):
     if not os.path.exists(resolvers):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Resolvers file not found")
         return 0
@@ -215,11 +215,15 @@ def run_port_scan(domains_file, resolvers, output_file):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Domains file not found")
         return 0
 
+    if width not in ["100", "1000", "full"]:
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Invalid width")
+        return 0
+
     spinner = Spinner("Scanning for open ports...")
     spinner.start()
 
     try:
-        cmd = f"cat {domains_file} | dnsx -silent -r {resolvers} -a -resp-only | naabu -silent -tp full > {output_file}"
+        cmd = f"cat {domains_file} | dnsx -silent -r {resolvers} -a -resp-only | naabu -silent -tp {width} > {output_file}"
         subprocess.run(cmd, shell=True, timeout=3600, stderr=subprocess.DEVNULL)
 
         spinner.stop()
@@ -388,7 +392,7 @@ def main():
     parser.add_argument("-sd", action="store_true", help="Run shuffledns bruteforcing")
     parser.add_argument("-r", metavar="resolvers.txt", help="List of resolvers for dns bruteforcing/port scanning")
     parser.add_argument("-w", metavar="wordlist.txt", help="List of subdomains for dns bruteforcing")
-    parser.add_argument("-ps", action="store_true", help="Run port scanning")
+    parser.add_argument("-ps", metavar="WIDTH", help="Run port scanning with width: 100, 1000, or full")
     parser.add_argument("-s", action="store_true", help="Take screenshots")
 
     args = parser.parse_args()
@@ -402,6 +406,10 @@ def main():
 
     if args.ps and not args.r:
         print(f"[{Colors.RED}ERR{Colors.RESET}] Port scan requires -r flag")
+        sys.exit(1)
+
+    if args.ps and args.ps not in ["100", "1000", "full"]:
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Port scan width must be 100, 1000, or full")
         sys.exit(1)
 
     verify_tools(args)
@@ -434,7 +442,8 @@ def main():
         results['portscan'] = run_port_scan(
             f"{output_dir}/domains.txt",
             args.r,
-            f"{output_dir}/open-ports.txt"
+            f"{output_dir}/open-ports.txt",
+            args.ps
         )
 
     if args.s and total > 0:
