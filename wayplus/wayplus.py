@@ -71,7 +71,7 @@ class Config:
     JUICY_FIELDS = ["email", "username", "password", "api_key", "access_token",
                     "session_id", "role", "scope"]
 
-    JUICY_PARAMS = re.compile(
+    SECRET_PARAMS = re.compile(
         r'[?&](code|token|ticket|key|secret|password|pass|pwd|auth|session|sid|jwt|bearer|'
         r'access_token|refresh_token|api_key|apikey|client_secret|private_key|oauth|callback|'
         r'redirect|redirect_uri|state|nonce)=',
@@ -209,7 +209,7 @@ def pattern_match_mode(urls, mode, output_dir, target):
 
     return matched
 
-def fetch_backup_urls(target, output_dir, extensions=None):
+def fetch_compressed_files_urls(target, output_dir, extensions=None):
     extensions = extensions or Config.DEFAULT_EXTENSIONS
 
     archive_url = f'https://web.archive.org/cdx/search/cdx?url=*.{target}/*&output=txt&fl=original&collapse=urlkey&page=/'
@@ -223,15 +223,15 @@ def fetch_backup_urls(target, output_dir, extensions=None):
         return []
 
     urls = response.text.splitlines()
-    filtered = {ext: [url for url in urls if url.lower().endswith(ext.lower())]
-                for ext in extensions}
 
     all_urls = []
-    for ext, ext_urls in filtered.items():
-        if ext_urls:
-            backup_path = f"{output_dir}/{target}_{ext.strip('.').lower()}_backups.txt"
-            save_file(backup_path, ext_urls)
-            all_urls.extend(ext_urls)
+    for url in urls:
+        if any(url.lower().endswith(ext.lower()) for ext in extensions):
+            all_urls.append(url)
+
+    if all_urls:
+        compressed_path = f"{output_dir}/{target}_compressed.txt"
+        save_file(compressed_path, all_urls)
 
     return all_urls
 
@@ -357,14 +357,14 @@ def find_keyword(urls, keyword):
     matches = [u for u in urls if keyword.lower() in u.lower()]
     return matches
 
-def extract_sensitive_urls(urls, output_dir, target):
-    sensitive = [url for url in urls if Config.JUICY_PARAMS.search(url)]
+def extract_secret_urls(urls, output_dir, target):
+    secret = [url for url in urls if Config.SECRET_PARAMS.search(url)]
 
-    if sensitive:
-        output_path = f"{output_dir}/{target}_sensitive.txt"
-        save_file(output_path, sensitive)
+    if secret:
+        output_path = f"{output_dir}/{target}_secrets.txt"
+        save_file(output_path, secret)
 
-    return sensitive
+    return secret
 
 def extract_api_urls(urls, output_dir, target):
     api_urls = [url for url in urls
@@ -410,15 +410,15 @@ def run_automated_analysis(urls, target, output_dir):
     else:
         print(f"{Colors.RED}✗{Colors.RESET} Parameters: 0 found")
 
-    spinner = Spinner("Searching for sensitive URLs")
+    spinner = Spinner("Searching for Secret URLs")
     spinner.start()
-    sensitive = extract_sensitive_urls(urls, output_dir, target)
+    secret = extract_secret_urls(urls, output_dir, target)
     spinner.stop()
-    results["sensitive"] = len(sensitive)
-    if sensitive:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Sensitive URLs: {len(sensitive)} found")
+    results["secret"] = len(secret)
+    if secret:
+        print(f"{Colors.GREEN}✓{Colors.RESET} Secret URLs: {len(secret)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Sensitive URLs: 0 found")
+        print(f"{Colors.RED}✗{Colors.RESET} Secret URLs: 0 found")
 
     spinner = Spinner("Extracting API endpoints")
     spinner.start()
@@ -472,15 +472,15 @@ def run_automated_analysis(urls, target, output_dir):
     else:
         print(f"{Colors.RED}✗{Colors.RESET} JWT tokens: 0 found")
 
-    spinner = Spinner("Searching for backup files")
+    spinner = Spinner("Searching for compressed files")
     spinner.start()
-    backups = fetch_backup_urls(target, output_dir, load_file("extensions.txt", Config.DEFAULT_EXTENSIONS))
+    compressed = fetch_compressed_files_urls(target, output_dir, load_file("extensions.txt", Config.DEFAULT_EXTENSIONS))
     spinner.stop()
-    results["backups"] = len(backups)
-    if backups:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Backup files: {len(backups)} found")
+    results["compressed"] = len(compressed)
+    if compressed:
+        print(f"{Colors.GREEN}✓{Colors.RESET} Compressed files: {len(compressed)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Backup files: 0 found")
+        print(f"{Colors.RED}✗{Colors.RESET} Compressed files: 0 found")
 
     spinner = Spinner("Scanning for XSS patterns")
     spinner.start()
