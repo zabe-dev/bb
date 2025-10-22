@@ -253,10 +253,10 @@ def run_port_scan(domains_file, resolvers, output_file, width):
 
 def run_screenshots(domains_file, output_dir):
     if not os.path.exists(domains_file):
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Running gowitness... Domains file not found")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Taking screenshots... Domains file not found")
         return 0
 
-    spinner = Spinner("Running gowitness...")
+    spinner = Spinner("Taking screenshots...")
     spinner.start()
 
     try:
@@ -265,16 +265,16 @@ def run_screenshots(domains_file, output_dir):
                       timeout=7200, cwd=output_dir)
 
         spinner.stop()
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Running gowitness... Finished")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Taking screenshots... Finished")
         return 1
 
     except subprocess.TimeoutExpired:
         spinner.stop()
-        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] Running gowitness... Timeout")
+        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] Taking screenshots... Timeout")
         return 0
     except Exception as e:
         spinner.stop()
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Running gowitness... {e}")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Taking screenshots... {e}")
         return 0
 
 def combine_results(output_dir, domain):
