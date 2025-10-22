@@ -180,7 +180,7 @@ def fetch_waymore_urls(target, output_dir):
 
         if process.returncode == 0 and os.path.exists(output_file):
             urls = load_file(output_file)
-            print(f"{Colors.GREEN}✓{Colors.RESET} Retrieved {len(urls)} URLs")
+            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Retrieved {len(urls)} URLs")
             return urls, output_file
         else:
             print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to fetch URLs")
@@ -395,9 +395,9 @@ def run_automated_analysis(urls, target, output_dir):
     if subdomains:
         save_file(f"{output_dir}/{target}_subdomains.txt", subdomains)
         results["subdomains"] = len(subdomains)
-        print(f"{Colors.GREEN}✓{Colors.RESET} Subdomains: {len(subdomains)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Subdomains: {len(subdomains)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Subdomains: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Subdomains: 0 found")
 
     spinner = Spinner("Extracting parameters")
     spinner.start()
@@ -406,9 +406,9 @@ def run_automated_analysis(urls, target, output_dir):
     if params:
         save_file(f"{output_dir}/{target}_parameters.txt", params)
         results["parameters"] = len(params)
-        print(f"{Colors.GREEN}✓{Colors.RESET} Parameters: {len(params)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Parameters: {len(params)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Parameters: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Parameters: 0 found")
 
     spinner = Spinner("Searching for Secret URLs")
     spinner.start()
@@ -416,9 +416,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["secret"] = len(secret)
     if secret:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Secret URLs: {len(secret)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Secret URLs: {len(secret)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Secret URLs: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Secret URLs: 0 found")
 
     spinner = Spinner("Extracting API endpoints")
     spinner.start()
@@ -426,9 +426,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["apis"] = len(apis)
     if apis:
-        print(f"{Colors.GREEN}✓{Colors.RESET} API endpoints: {len(apis)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] API endpoints: {len(apis)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} API endpoints: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] API endpoints: 0 found")
 
     spinner = Spinner("Extracting static files")
     spinner.start()
@@ -436,9 +436,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["static_files"] = len(static_files)
     if static_files:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Static files: {len(static_files)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Static files: {len(static_files)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Static files: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Static files: 0 found")
 
     spinner = Spinner("Searching for JSON URLs")
     spinner.start()
@@ -447,9 +447,9 @@ def run_automated_analysis(urls, target, output_dir):
     if json_urls:
         save_file(f"{output_dir}/{target}_json.txt", json_urls)
         results["json"] = len(json_urls)
-        print(f"{Colors.GREEN}✓{Colors.RESET} JSON URLs: {len(json_urls)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] JSON URLs: {len(json_urls)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} JSON URLs: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] JSON URLs: 0 found")
 
     spinner = Spinner("Searching for config URLs")
     spinner.start()
@@ -458,9 +458,9 @@ def run_automated_analysis(urls, target, output_dir):
     if config_urls:
         save_file(f"{output_dir}/{target}_config.txt", config_urls)
         results["config"] = len(config_urls)
-        print(f"{Colors.GREEN}✓{Colors.RESET} Config URLs: {len(config_urls)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Config URLs: {len(config_urls)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Config URLs: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Config URLs: 0 found")
 
     spinner = Spinner("Analyzing JWT tokens")
     spinner.start()
@@ -468,9 +468,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["jwt"] = jwt_count
     if jwt_count:
-        print(f"{Colors.GREEN}✓{Colors.RESET} JWT tokens: {jwt_count} analyzed")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] JWT tokens: {jwt_count} analyzed")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} JWT tokens: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] JWT tokens: 0 found")
 
     spinner = Spinner("Searching for compressed files")
     spinner.start()
@@ -478,9 +478,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["compressed"] = len(compressed)
     if compressed:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Compressed files: {len(compressed)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Compressed files: {len(compressed)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Compressed files: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Compressed files: 0 found")
 
     spinner = Spinner("Scanning for XSS patterns")
     spinner.start()
@@ -488,9 +488,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["xss"] = len(xss)
     if xss:
-        print(f"{Colors.GREEN}✓{Colors.RESET} XSS patterns: {len(xss)} matches")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] XSS patterns: {len(xss)} matches")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} XSS patterns: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] XSS patterns: 0 found")
 
     spinner = Spinner("Scanning for SQLi patterns")
     spinner.start()
@@ -498,9 +498,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["sqli"] = len(sqli)
     if sqli:
-        print(f"{Colors.GREEN}✓{Colors.RESET} SQLi patterns: {len(sqli)} matches")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] SQLi patterns: {len(sqli)} matches")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} SQLi patterns: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] SQLi patterns: 0 found")
 
     spinner = Spinner("Scanning for LFI patterns")
     spinner.start()
@@ -508,9 +508,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["lfi"] = len(lfi)
     if lfi:
-        print(f"{Colors.GREEN}✓{Colors.RESET} LFI patterns: {len(lfi)} matches")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] LFI patterns: {len(lfi)} matches")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} LFI patterns: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] LFI patterns: 0 found")
 
     spinner = Spinner("Scanning for open redirect patterns")
     spinner.start()
@@ -518,9 +518,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["redirect"] = len(redirect)
     if redirect:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Open redirect: {len(redirect)} matches")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Open redirect: {len(redirect)} matches")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Open redirect: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Open redirect: 0 found")
 
     spinner = Spinner("Scanning for directory listings")
     spinner.start()
@@ -528,9 +528,9 @@ def run_automated_analysis(urls, target, output_dir):
     spinner.stop()
     results["dir_listings"] = len(listings)
     if listings:
-        print(f"{Colors.GREEN}✓{Colors.RESET} Directory listings: {len(listings)} found")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Directory listings: {len(listings)} found")
     else:
-        print(f"{Colors.RED}✗{Colors.RESET} Directory listings: 0 found")
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Directory listings: 0 found")
 
     return results
 
