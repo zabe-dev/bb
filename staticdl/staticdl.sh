@@ -499,8 +499,8 @@ main() {
 
     print_summary
     echo ""
-    log_info "Files saved to: $output_dir/"
-    log_info "Time elapsed: ${elapsed}s"
+    log_info "Files saved to: $output_dir"
+    log_info "Download finished (${elapsed}s time elapsed)"
     echo ""
 }
 
