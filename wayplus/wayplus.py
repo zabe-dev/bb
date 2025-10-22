@@ -535,10 +535,10 @@ def run_automated_analysis(urls, target, output_dir):
     return results
 
 def print_summary(results, output_dir):
-    print(f"\n[{Colors.CYAN}INF{Colors.RESET}] Results saved to: {output_dir}/")
+    print(f"\n[{Colors.CYAN}INF{Colors.RESET}] Results saved to: {output_dir}")
 
     elapsed = time.time() - START_TIME
-    print(f"[{Colors.CYAN}INF{Colors.RESET}] Time elapsed: {elapsed:.2f}s\n")
+    print(f"[{Colors.CYAN}INF{Colors.RESET}] Scan finished {Colors.DIM}({elapsed:.3f}s time elapsed){Colors.RESET}\n")
 
 def main():
     global START_TIME
