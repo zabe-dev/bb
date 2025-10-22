@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import os
 import re
@@ -543,18 +544,17 @@ def print_summary(results, output_dir):
 def main():
     global START_TIME
 
+    parser = argparse.ArgumentParser(description='Wayback URL Analyzer')
+    parser.add_argument('-d', required=True, metavar="example.com", help='Target domain')
+    parser.add_argument('-output', required=True, metavar="output_dir/",  help='Output directory')
+
+    args = parser.parse_args()
+
     print_banner()
     START_TIME = time.time()
 
-    target = input(f"[{Colors.CYAN}INF{Colors.RESET}] Enter target domain: ").strip()
-    if not target:
-        print(f"[{Colors.RED}ERR{Colors.RESET}] No target provided")
-        return
-
-    output_dir = input(f"[{Colors.CYAN}INF{Colors.RESET}] Enter output directory name: ").strip()
-    if not output_dir:
-        print(f"[{Colors.RED}ERR{Colors.RESET}] No output directory provided")
-        return
+    target = args.d.strip()
+    output_dir = args.output.strip()
 
     urls, urls_file = fetch_waymore_urls(target, output_dir)
     if not urls:
