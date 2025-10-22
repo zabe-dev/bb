@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Prerequisites:
-# 1. Clone SecLists: git clone https://github.com/danielmiessler/SecLists ~/wordlists/SecLists
+# 1. Clone SecLists: git clone https://github.com/danielmiessler/SecLists.git ~/wordlists/SecLists
 # 2. Download Assetnote wordlists: wget -r --no-parent -R "index.html*" https://wordlists-cdn.assetnote.io/data/ -nH -e robots=off
 #    Then move the downloaded 'data' folder to ~/wordlists/assetnote
 # 3. Add your custom wordlists to ~/wordlists/custom
