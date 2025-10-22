@@ -5,7 +5,7 @@ A bash script for testing URL-based access control bypasses through various HTTP
 ## Usage
 
 ```bash
-./bypass-40X.sh https://example.com/path/to/resource
+./bypass40X.sh https://example.com/path/to/resource
 ```
 
 ## What It Tests
