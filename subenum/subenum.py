@@ -450,7 +450,7 @@ def main():
         results['screenshots'] = run_screenshots(f"{output_dir}/domains.txt", output_dir)
 
     elapsed = time.time() - START_TIME
-    print(f"\n[{Colors.CYAN}INF{Colors.RESET}] Results saved to: {output_dir}/")
+    print(f"\n[{Colors.CYAN}INF{Colors.RESET}] Results saved to: {output_dir}")
     print(f"[{Colors.CYAN}INF{Colors.RESET}] Scan finished {Colors.DIM}({elapsed:.2f}s time elapsed){Colors.RESET}\n")
 
 if __name__ == "__main__":
