@@ -208,19 +208,19 @@ def run_shuffledns(domain, resolvers, wordlist, output_file):
 
 def run_port_scan(domains_file, resolvers, output_file):
     if not os.path.exists(resolvers):
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Running dnsx + naabu... Resolvers file not found")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Resolvers file not found")
         return 0
 
     if not os.path.exists(domains_file):
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Running dnsx + naabu... Domains file not found")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Domains file not found")
         return 0
 
-    spinner = Spinner("Running dnsx + naabu...")
+    spinner = Spinner("Scanning for open ports...")
     spinner.start()
 
     try:
         cmd = f"cat {domains_file} | dnsx -silent -r {resolvers} -a -resp-only | naabu -silent -tp full > {output_file}"
-        subprocess.run(cmd, shell=True, timeout=1800, stderr=subprocess.DEVNULL)
+        subprocess.run(cmd, shell=True, timeout=3600, stderr=subprocess.DEVNULL)
 
         spinner.stop()
 
@@ -229,22 +229,22 @@ def run_port_scan(domains_file, resolvers, output_file):
                 count = sum(1 for line in f if line.strip())
 
             if count > 0:
-                print(f"[{Colors.GREEN}SUC{Colors.RESET}] Running dnsx + naabu... {count} hosts with open ports")
+                print(f"[{Colors.GREEN}SUC{Colors.RESET}] Scanning for open ports... {count} hosts with open ports")
                 return count
             else:
-                print(f"[{Colors.RED}FAIL{Colors.RESET}] Running dnsx + naabu... 0 open ports")
+                print(f"[{Colors.RED}FAIL{Colors.RESET}] Scanning for open ports... 0 open ports")
                 return 0
         else:
-            print(f"[{Colors.RED}FAIL{Colors.RESET}] Running dnsx + naabu... Failed")
+            print(f"[{Colors.RED}FAIL{Colors.RESET}] Scanning for open ports... Failed")
             return 0
 
     except subprocess.TimeoutExpired:
         spinner.stop()
-        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] Running dnsx + naabu... Timeout")
+        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] Scanning for open ports... Timeout")
         return 0
     except Exception as e:
         spinner.stop()
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Running dnsx + naabu... {e}")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... {e}")
         return 0
 
 def run_screenshots(domains_file, output_dir):
@@ -261,7 +261,7 @@ def run_screenshots(domains_file, output_dir):
                       timeout=7200, cwd=output_dir)
 
         spinner.stop()
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Running gowitness... Screenshots saved")
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Running gowitness... Finished")
         return 1
 
     except subprocess.TimeoutExpired:
@@ -296,25 +296,58 @@ def combine_results(output_dir, domain):
                     if line:
                         all_domains.add(line)
 
-    domains_file = f"{output_dir}/domains.txt"
-    with open(domains_file, 'w') as f:
-        for d in sorted(all_domains):
-            f.write(f"{d}\n")
-
     spinner.stop()
 
-    count = len(all_domains)
-    if count > 0:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Combining results... {count} unique domains")
+    total_found = len(all_domains)
+    if total_found > 0:
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Combining results... {total_found} unique domains")
     else:
         print(f"[{Colors.RED}FAIL{Colors.RESET}] Combining results... 0 domains")
+        return 0
 
-    return count
+    spinner = Spinner("Resolving subdomains...")
+    spinner.start()
+
+    try:
+        raw_domains_file = f"{output_dir}/domains-raw.txt"
+        with open(raw_domains_file, 'w') as f:
+            for d in sorted(all_domains):
+                f.write(f"{d}\n")
+
+        domains_file = f"{output_dir}/domains.txt"
+        cmd = f"cat {raw_domains_file} | httpx -silent -nc -o {domains_file}"
+        subprocess.run(cmd, shell=True, timeout=1800, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        spinner.stop()
+
+        if os.path.exists(domains_file):
+            with open(domains_file, 'r') as f:
+                resolved_count = sum(1 for line in f if line.strip())
+
+            if resolved_count > 0:
+                print(f"[{Colors.GREEN}SUC{Colors.RESET}] Resolving subdomains... {resolved_count} resolved")
+                return resolved_count
+            else:
+                print(f"[{Colors.RED}FAIL{Colors.RESET}] Resolving subdomains... 0 resolved")
+                return 0
+        else:
+            spinner.stop()
+            print(f"[{Colors.RED}FAIL{Colors.RESET}] Resolving subdomains... Failed")
+            return 0
+
+    except subprocess.TimeoutExpired:
+        spinner.stop()
+        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] Resolving subdomains... Timeout")
+        return 0
+    except Exception as e:
+        spinner.stop()
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Resolving subdomains... {e}")
+        return 0
 
 def verify_tools(args):
     print(f"[{Colors.CYAN}INF{Colors.RESET}] Checking required tools...")
 
-    required = ["subfinder", "findomain", "assetfinder"]
+    required = ["subfinder", "findomain", "assetfinder", "httpx"]
     optional = []
 
     if args.sd:
@@ -395,11 +428,9 @@ def main():
             f"{output_dir}/shuffledns.txt"
         )
 
-    print()
     total = combine_results(output_dir, args.d)
 
     if args.ps and total > 0:
-        print()
         results['portscan'] = run_port_scan(
             f"{output_dir}/domains.txt",
             args.r,
@@ -407,12 +438,11 @@ def main():
         )
 
     if args.s and total > 0:
-        print()
         results['screenshots'] = run_screenshots(f"{output_dir}/domains.txt", output_dir)
 
     elapsed = time.time() - START_TIME
     print(f"\n[{Colors.CYAN}INF{Colors.RESET}] Results saved to: {output_dir}/")
-    print(f"[{Colors.CYAN}INF{Colors.RESET}] Time elapsed: {elapsed:.2f}s\n")
+    print(f"[{Colors.CYAN}INF{Colors.RESET}] Scan finished {Colors.DIM}({elapsed:.2f}s time elapsed){Colors.RESET}\n")
 
 if __name__ == "__main__":
     try:
