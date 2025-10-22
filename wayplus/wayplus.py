@@ -92,15 +92,7 @@ class Config:
         re.IGNORECASE
     )
 
-    DB_MAP = {
-        "xss": "xss.txt",
-        "sqli": "sqli.txt",
-        "lfi": "lfi.txt",
-        "redirect": "openredirect.txt",
-        "jira": "jira.txt",
-        "wp": "wp-fuzz.txt",
-        "fuzz": "fuzz.txt"
-    }
+    GF_PATTERNS = ["idor", "lfi", "rce", "redirect", "sqli", "ssrf", "ssti", "xss"]
 
     DEFAULT_EXTENSIONS = [".zip", ".tar.gz", ".rar", ".sql", ".bak", ".7z", ".gz"]
     LISTING_PATTERNS = ["Index of /", "Parent Directory", "Directory listing",
@@ -194,21 +186,24 @@ def fetch_waymore_urls(target, output_dir):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Error: {e}")
         return [], None
 
-def pattern_match_mode(urls, mode, output_dir, target):
-    if mode not in Config.DB_MAP:
+def gf_pattern_match(urls_file, pattern, output_dir, target):
+    try:
+        output_path = f"{output_dir}/{target}_{pattern}.txt"
+
+        with open(urls_file, 'r') as f:
+            result = subprocess.run(['gf', pattern], stdin=f, capture_output=True, text=True)
+
+        if result.returncode == 0 and result.stdout.strip():
+            matched = result.stdout.strip().split('\n')
+            save_file(output_path, matched)
+            return matched
+
         return []
 
-    patterns = load_file(f"db/{Config.DB_MAP[mode]}")
-    if not patterns:
+    except FileNotFoundError:
         return []
-
-    matched = [url for url in urls if any(pattern in url for pattern in patterns)]
-
-    if matched:
-        output_path = f"{output_dir}/{target}_{mode}.txt"
-        save_file(output_path, matched)
-
-    return matched
+    except Exception:
+        return []
 
 def fetch_compressed_files_urls(target, output_dir, extensions=None):
     extensions = extensions or Config.DEFAULT_EXTENSIONS
@@ -386,7 +381,7 @@ def extract_static_urls(urls, output_dir, target):
 
     return static_urls
 
-def run_automated_analysis(urls, target, output_dir):
+def run_automated_analysis(urls, urls_file, target, output_dir):
     results = {}
 
     spinner = Spinner("Extracting subdomains")
@@ -483,45 +478,16 @@ def run_automated_analysis(urls, target, output_dir):
     else:
         print(f"[{Colors.RED}FAIL{Colors.RESET}] Compressed files: 0 found")
 
-    spinner = Spinner("Scanning for XSS patterns")
-    spinner.start()
-    xss = pattern_match_mode(urls, "xss", output_dir, target)
-    spinner.stop()
-    results["xss"] = len(xss)
-    if xss:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] XSS patterns: {len(xss)} matches")
-    else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] XSS patterns: 0 found")
-
-    spinner = Spinner("Scanning for SQLi patterns")
-    spinner.start()
-    sqli = pattern_match_mode(urls, "sqli", output_dir, target)
-    spinner.stop()
-    results["sqli"] = len(sqli)
-    if sqli:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] SQLi patterns: {len(sqli)} matches")
-    else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] SQLi patterns: 0 found")
-
-    spinner = Spinner("Scanning for LFI patterns")
-    spinner.start()
-    lfi = pattern_match_mode(urls, "lfi", output_dir, target)
-    spinner.stop()
-    results["lfi"] = len(lfi)
-    if lfi:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] LFI patterns: {len(lfi)} matches")
-    else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] LFI patterns: 0 found")
-
-    spinner = Spinner("Scanning for open redirect patterns")
-    spinner.start()
-    redirect = pattern_match_mode(urls, "redirect", output_dir, target)
-    spinner.stop()
-    results["redirect"] = len(redirect)
-    if redirect:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Open redirect: {len(redirect)} matches")
-    else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Open redirect: 0 found")
+    for pattern in Config.GF_PATTERNS:
+        spinner = Spinner(f"Scanning for {pattern.upper()} patterns")
+        spinner.start()
+        matched = gf_pattern_match(urls_file, pattern, output_dir, target)
+        spinner.stop()
+        results[pattern] = len(matched)
+        if matched:
+            print(f"[{Colors.GREEN}SUC{Colors.RESET}] {pattern.upper()} patterns: {len(matched)} matches")
+        else:
+            print(f"[{Colors.RED}FAIL{Colors.RESET}] {pattern.upper()} patterns: 0 found")
 
     spinner = Spinner("Scanning for directory listings")
     spinner.start()
@@ -561,7 +527,7 @@ def main():
         print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to fetch URLs")
         return
 
-    results = run_automated_analysis(urls, target, output_dir)
+    results = run_automated_analysis(urls, urls_file, target, output_dir)
 
     print_summary(results, output_dir)
 
