@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import os
 import signal
 import subprocess
 import sys
 import threading
 import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 VERSION = "1.0"
@@ -92,7 +95,7 @@ def run_command(cmd, output_file, spinner_msg, timeout=900):
     try:
         with open(output_file, 'w') as f:
             result = subprocess.run(cmd, stdout=f, stderr=subprocess.DEVNULL,
-                                  timeout=timeout, shell=isinstance(cmd, str))
+                                  timeout=timeout)
 
         spinner.stop()
 
@@ -101,23 +104,23 @@ def run_command(cmd, output_file, spinner_msg, timeout=900):
                 count = sum(1 for line in f if line.strip())
 
             if count > 0:
-                print(f"[{Colors.GREEN}SUC{Colors.RESET}] {spinner_msg}: {count} found")
+                print(f"[{Colors.GREEN}SUC{Colors.RESET}] {spinner_msg} {count} found")
                 return count
             else:
-                print(f"[{Colors.RED}FAIL{Colors.RESET}] {spinner_msg}: 0 found")
+                print(f"[{Colors.RED}FAIL{Colors.RESET}] {spinner_msg} 0 found")
                 return 0
         else:
             spinner.stop()
-            print(f"[{Colors.RED}FAIL{Colors.RESET}] {spinner_msg}: Failed")
+            print(f"[{Colors.RED}FAIL{Colors.RESET}] {spinner_msg} Failed")
             return 0
 
     except subprocess.TimeoutExpired:
         spinner.stop()
-        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] {spinner_msg}: Timeout (skipped)")
+        print(f"[{Colors.ORANGE}WRN{Colors.RESET}] {spinner_msg} Timeout (skipped)")
         return 0
     except Exception as e:
         spinner.stop()
-        print(f"[{Colors.RED}ERR{Colors.RESET}] {spinner_msg}: {e}")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] {spinner_msg} {e}")
         return 0
 
 def run_subfinder(domain, output_file):
@@ -129,12 +132,57 @@ def run_findomain(domain, output_file):
     return run_command(cmd, output_file, "Running findomain...")
 
 def run_assetfinder(domain, output_file):
-    cmd = f"assetfinder -subs-only {domain} > {output_file}"
+    cmd = ["assetfinder", "-subs-only", domain]
     return run_command(cmd, output_file, "Running assetfinder...")
 
 def run_crtsh(domain, output_file):
-    cmd = ["crtsh", ">", domain]
-    return run_command(cmd, output_file, "Running crtsh...")
+    spinner = Spinner("Running crt.sh...")
+    spinner.start()
+
+    max_retries = 3
+    domains = set()
+
+    for attempt in range(max_retries):
+        try:
+            url = f"https://crt.sh/?q=%25.{domain}&output=json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = response.read().decode('utf-8')
+
+                if data:
+                    results = json.loads(data)
+                    for entry in results:
+                        if 'common_name' in entry and entry['common_name']:
+                            domains.add(entry['common_name'].lower())
+                        if 'name_value' in entry and entry['name_value']:
+                            for name in entry['name_value'].split('\n'):
+                                if name.strip():
+                                    domains.add(name.strip().lower())
+                    break
+
+        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, Exception) as e:
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            else:
+                spinner.stop()
+                print(f"[{Colors.RED}FAIL{Colors.RESET}] Running crt.sh... Failed after {max_retries} retries")
+                return 0
+
+    spinner.stop()
+
+    if domains:
+        with open(output_file, 'w') as f:
+            for d in sorted(domains):
+                f.write(f"{d}\n")
+
+        count = len(domains)
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Running crt.sh... {count} found")
+        return count
+    else:
+        print(f"[{Colors.RED}FAIL{Colors.RESET}] Running crt.sh... 0 found")
+        return 0
 
 def run_chaos(domain, output_file):
     api_key = os.environ.get('CHAOS_API_KEY')
@@ -155,7 +203,7 @@ def run_shuffledns(domain, resolvers, wordlist, output_file):
         return 0
 
     cmd = ["shuffledns", "-d", domain, "-r", resolvers, "-w", wordlist,
-           "-mode", "bruteforce", "-silent"]
+           "-mode", "bruteforce", "-silent", "-o", output_file]
     return run_command(cmd, output_file, "Running shuffledns...", timeout=3600)
 
 def run_port_scan(domains_file, resolvers, output_file):
@@ -208,9 +256,9 @@ def run_screenshots(domains_file, output_dir):
     spinner.start()
 
     try:
-        os.chdir(output_dir)
-        cmd = ["gowitness", "scan", "file", "-f", domains_file, "--write-none"]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=7200)
+        cmd = ["gowitness", "scan", "file", "-f", os.path.abspath(domains_file), "--write-none"]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                      timeout=7200, cwd=output_dir)
 
         spinner.stop()
         print(f"[{Colors.GREEN}SUC{Colors.RESET}] Running gowitness... Screenshots saved")
@@ -266,7 +314,7 @@ def combine_results(output_dir, domain):
 def verify_tools(args):
     print(f"[{Colors.CYAN}INF{Colors.RESET}] Checking required tools...")
 
-    required = ["subfinder", "findomain", "assetfinder", "crtsh"]
+    required = ["subfinder", "findomain", "assetfinder"]
     optional = []
 
     if args.sd:
@@ -285,7 +333,6 @@ def verify_tools(args):
     for tool in required:
         if not check_tool(tool):
             missing.append(tool)
-            print(f"[{Colors.RED}MISS{Colors.RESET}] {tool}")
 
     for tool in optional:
         if not check_tool(tool):
@@ -310,7 +357,6 @@ def main():
     parser.add_argument("-w", metavar="wordlist.txt", help="List of subdomains for dns bruteforcing")
     parser.add_argument("-ps", action="store_true", help="Run port scanning")
     parser.add_argument("-s", action="store_true", help="Take screenshots")
-
 
     args = parser.parse_args()
 
