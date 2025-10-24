@@ -19,7 +19,6 @@ import requests
 VERSION = "1.0"
 START_TIME = None
 INTERRUPTED = False
-LOADING_ACTIVE = False
 
 class Colors:
     CYAN = '\033[96m'
@@ -173,14 +172,14 @@ def fetch_waymore_urls(target, output_dir):
 
         if process.returncode == 0 and os.path.exists(output_file):
             urls = load_file(output_file)
-            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Retrieved {len(urls)} URLs")
+            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Found {len(urls)} URLs from archives")
             return urls, output_file
         else:
             print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to fetch URLs")
             return [], None
 
     except FileNotFoundError:
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Waymore not installed. Run `{Colors.DIM}pipx install git+https://github.com/xnl-h4ck3r/waymore.git{Colors.RESET}` to install.")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Waymore not installed. Install: pip install waymore")
         return [], None
     except Exception as e:
         print(f"[{Colors.RED}ERR{Colors.RESET}] Error: {e}")
@@ -192,7 +191,7 @@ def crawl_with_katana(target, output_dir):
     cmd = ["katana", "-u", target, "-retry", "3", "-jc", "-o", output_file]
 
     try:
-        spinner = Spinner("Crawling site with Katana...")
+        spinner = Spinner("Crawling live site...")
         spinner.start()
 
         process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
@@ -205,7 +204,7 @@ def crawl_with_katana(target, output_dir):
 
         if process.returncode == 0 and os.path.exists(output_file):
             urls = load_file(output_file)
-            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Crawled {len(urls)} URLs")
+            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Found {len(urls)} URLs from crawling target")
             return urls, output_file
         else:
             print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to crawl with Katana")
@@ -344,25 +343,42 @@ def extract_parameters(urls):
     return results
 
 def scan_for_listings(domain, output_dir, threads=10):
-    archive_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain}/*&output=txt&fl=original&collapse=urlkey"
+    parsed_domain = urlparse(domain if '://' in domain else f'https://{domain}')
+    hostname = parsed_domain.hostname or domain
+    base_path = parsed_domain.path.rstrip('/') if parsed_domain.path else ''
+
+    archive_url = f"https://web.archive.org/cdx/search/cdx?url={hostname}/*&output=txt&fl=original&collapse=urlkey"
 
     spinner = Spinner("Fetching Wayback URLs")
     spinner.start()
     response = retry_request(archive_url, timeout=15)
     spinner.stop()
 
-    if not response:
-        return []
+    paths = set()
 
-    urls = response.text.splitlines()
-    paths = {urlparse(url).path for url in urls
-             if urlparse(url).hostname == domain and urlparse(url).path and urlparse(url).path != "/"}
+    if response:
+        urls = response.text.splitlines()
+        for url in urls:
+            parsed = urlparse(url)
+            if parsed.hostname == hostname and parsed.path:
+                clean_path = parsed.path.rstrip('/')
+                if clean_path:
+                    paths.add(clean_path)
+                    parts = clean_path.split('/')
+                    for i in range(1, len(parts)):
+                        parent = '/'.join(parts[:i+1])
+                        if parent:
+                            paths.add(parent)
+
+    if base_path:
+        paths.add(base_path)
+    paths.add('/')
 
     def check_listing(path):
-        for scheme in ["http", "https"]:
-            full_url = f"{scheme}://{domain}{path}"
+        for scheme in ["https", "http"]:
+            full_url = f"{scheme}://{hostname}{path}" if path == '/' else f"{scheme}://{hostname}{path}/"
             try:
-                r = requests.get(full_url, timeout=5)
+                r = requests.get(full_url, timeout=5, headers=Config.HEADERS)
                 if r.status_code == 200 and any(p in r.text for p in Config.LISTING_PATTERNS):
                     return full_url
             except:
@@ -376,7 +392,8 @@ def scan_for_listings(domain, output_dir, threads=10):
                 listings.append(result)
 
     if listings:
-        output_path = f"{output_dir}/{domain}_dir_listings.txt"
+        clean_domain = hostname.replace('.', '_')
+        output_path = f"{output_dir}/{clean_domain}_dir_listings.txt"
         save_file(output_path, listings)
 
     return listings
@@ -423,9 +440,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if subdomains:
         save_file(f"{output_dir}/{target}_subdomains.txt", subdomains)
         results["subdomains"] = len(subdomains)
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Subdomains: {len(subdomains)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Subdomains: {len(subdomains)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Subdomains: 0 found")
+        print(f"[-] Subdomains: 0 found")
 
     spinner = Spinner("Extracting parameters")
     spinner.start()
@@ -434,9 +451,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if params:
         save_file(f"{output_dir}/{target}_parameters.txt", params)
         results["parameters"] = len(params)
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Parameters: {len(params)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Parameters: {len(params)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Parameters: 0 found")
+        print(f"[-] Parameters: 0 found")
 
     spinner = Spinner("Searching for Secret URLs")
     spinner.start()
@@ -444,9 +461,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     spinner.stop()
     results["secret"] = len(secret)
     if secret:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Secret URLs: {len(secret)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Secret URLs: {len(secret)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Secret URLs: 0 found")
+        print(f"[-] Secret URLs: 0 found")
 
     spinner = Spinner("Extracting API endpoints")
     spinner.start()
@@ -454,9 +471,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     spinner.stop()
     results["apis"] = len(apis)
     if apis:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] API endpoints: {len(apis)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] API endpoints: {len(apis)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] API endpoints: 0 found")
+        print(f"[-] API endpoints: 0 found")
 
     spinner = Spinner("Extracting static files")
     spinner.start()
@@ -464,9 +481,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     spinner.stop()
     results["static_files"] = len(static_files)
     if static_files:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Static files: {len(static_files)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Static files: {len(static_files)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Static files: 0 found")
+        print(f"[-] Static files: 0 found")
 
     spinner = Spinner("Searching for JSON URLs")
     spinner.start()
@@ -475,9 +492,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if json_urls:
         save_file(f"{output_dir}/{target}_json.txt", json_urls)
         results["json"] = len(json_urls)
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] JSON URLs: {len(json_urls)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] JSON URLs: {len(json_urls)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] JSON URLs: 0 found")
+        print(f"[-] JSON URLs: 0 found")
 
     spinner = Spinner("Searching for config URLs")
     spinner.start()
@@ -486,9 +503,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if config_urls:
         save_file(f"{output_dir}/{target}_config.txt", config_urls)
         results["config"] = len(config_urls)
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Config URLs: {len(config_urls)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Config URLs: {len(config_urls)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Config URLs: 0 found")
+        print(f"[-] Config URLs: 0 found")
 
     spinner = Spinner("Analyzing JWT tokens")
     spinner.start()
@@ -496,9 +513,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     spinner.stop()
     results["jwt"] = jwt_count
     if jwt_count:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] JWT tokens: {jwt_count} analyzed")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] JWT tokens: {jwt_count} analyzed")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] JWT tokens: 0 found")
+        print(f"[-] JWT tokens: 0 found")
 
     spinner = Spinner("Searching for compressed files")
     spinner.start()
@@ -506,9 +523,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     spinner.stop()
     results["compressed"] = len(compressed)
     if compressed:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Compressed files: {len(compressed)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Compressed files: {len(compressed)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Compressed files: 0 found")
+        print(f"[-] Compressed files: 0 found")
 
     for pattern in Config.GF_PATTERNS:
         spinner = Spinner(f"Scanning for {pattern.upper()} patterns")
@@ -517,9 +534,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         spinner.stop()
         results[pattern] = len(matched)
         if matched:
-            print(f"[{Colors.GREEN}SUC{Colors.RESET}] {pattern.upper()} patterns: {len(matched)} matches")
+            print(f"[{Colors.GREEN}+{Colors.RESET}] {pattern.upper()} patterns: {len(matched)} matches")
         else:
-            print(f"[{Colors.RED}FAIL{Colors.RESET}] {pattern.upper()} patterns: 0 found")
+            print(f"[-] {pattern.upper()} patterns: 0 found")
 
     spinner = Spinner("Scanning for directory listings")
     spinner.start()
@@ -527,9 +544,9 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     spinner.stop()
     results["dir_listings"] = len(listings)
     if listings:
-        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Directory listings: {len(listings)} found")
+        print(f"[{Colors.GREEN}+{Colors.RESET}] Directory listings: {len(listings)} found")
     else:
-        print(f"[{Colors.RED}FAIL{Colors.RESET}] Directory listings: 0 found")
+        print(f"[-] Directory listings: 0 found")
 
     return results
 
@@ -565,7 +582,7 @@ def main():
         all_urls = list(set(urls + katana_urls))
         combined_file = f"{output_dir}/{target}_combined.txt"
         save_file(combined_file, all_urls)
-        print(f"[{Colors.CYAN}INF{Colors.RESET}] Total unique URLs: {len(all_urls)}")
+        print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs")
         urls = all_urls
         urls_file = combined_file
 
