@@ -442,7 +442,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         results["subdomains"] = len(subdomains)
         print(f"[{Colors.GREEN}+{Colors.RESET}] Subdomains: {len(subdomains)} found")
     else:
-        print(f"[-] Subdomains: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Subdomains: 0 found")
 
     spinner = Spinner("Extracting parameters")
     spinner.start()
@@ -453,7 +453,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         results["parameters"] = len(params)
         print(f"[{Colors.GREEN}+{Colors.RESET}] Parameters: {len(params)} found")
     else:
-        print(f"[-] Parameters: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Parameters: 0 found")
 
     spinner = Spinner("Searching for Secret URLs")
     spinner.start()
@@ -463,7 +463,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if secret:
         print(f"[{Colors.GREEN}+{Colors.RESET}] Secret URLs: {len(secret)} found")
     else:
-        print(f"[-] Secret URLs: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Secret URLs: 0 found")
 
     spinner = Spinner("Extracting API endpoints")
     spinner.start()
@@ -473,7 +473,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if apis:
         print(f"[{Colors.GREEN}+{Colors.RESET}] API endpoints: {len(apis)} found")
     else:
-        print(f"[-] API endpoints: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] API endpoints: 0 found")
 
     spinner = Spinner("Extracting static files")
     spinner.start()
@@ -483,7 +483,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if static_files:
         print(f"[{Colors.GREEN}+{Colors.RESET}] Static files: {len(static_files)} found")
     else:
-        print(f"[-] Static files: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Static files: 0 found")
 
     spinner = Spinner("Searching for JSON URLs")
     spinner.start()
@@ -494,7 +494,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         results["json"] = len(json_urls)
         print(f"[{Colors.GREEN}+{Colors.RESET}] JSON URLs: {len(json_urls)} found")
     else:
-        print(f"[-] JSON URLs: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] JSON URLs: 0 found")
 
     spinner = Spinner("Searching for config URLs")
     spinner.start()
@@ -505,7 +505,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         results["config"] = len(config_urls)
         print(f"[{Colors.GREEN}+{Colors.RESET}] Config URLs: {len(config_urls)} found")
     else:
-        print(f"[-] Config URLs: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Config URLs: 0 found")
 
     spinner = Spinner("Analyzing JWT tokens")
     spinner.start()
@@ -515,7 +515,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if jwt_count:
         print(f"[{Colors.GREEN}+{Colors.RESET}] JWT tokens: {jwt_count} analyzed")
     else:
-        print(f"[-] JWT tokens: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] JWT tokens: 0 found")
 
     spinner = Spinner("Searching for compressed files")
     spinner.start()
@@ -525,7 +525,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if compressed:
         print(f"[{Colors.GREEN}+{Colors.RESET}] Compressed files: {len(compressed)} found")
     else:
-        print(f"[-] Compressed files: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Compressed files: 0 found")
 
     for pattern in Config.GF_PATTERNS:
         spinner = Spinner(f"Scanning for {pattern.upper()} patterns")
@@ -536,7 +536,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         if matched:
             print(f"[{Colors.GREEN}+{Colors.RESET}] {pattern.upper()} patterns: {len(matched)} matches")
         else:
-            print(f"[-] {pattern.upper()} patterns: 0 found")
+            print(f"[{Colors.RED}-{Colors.RESET}] {pattern.upper()} patterns: 0 found")
 
     spinner = Spinner("Scanning for directory listings")
     spinner.start()
@@ -546,7 +546,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     if listings:
         print(f"[{Colors.GREEN}+{Colors.RESET}] Directory listings: {len(listings)} found")
     else:
-        print(f"[-] Directory listings: 0 found")
+        print(f"[{Colors.RED}-{Colors.RESET}] Directory listings: 0 found")
 
     return results
 
@@ -582,7 +582,7 @@ def main():
         all_urls = list(set(urls + katana_urls))
         combined_file = f"{output_dir}/{target}_combined.txt"
         save_file(combined_file, all_urls)
-        print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs")
+        print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered total of {len(all_urls)} unique URLs\n")
         urls = all_urls
         urls_file = combined_file
 
