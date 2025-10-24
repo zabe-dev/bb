@@ -189,9 +189,7 @@ def fetch_waymore_urls(target, output_dir):
 def crawl_with_katana(target, output_dir):
     output_file = f"{output_dir}/{target}_katana.txt"
 
-    target_url = target if target.startswith(('http://', 'https://')) else f"https://{target}"
-
-    cmd = ["katana", "-u", target_url, "-retry", "3", "-jc", "-o", output_file]
+    cmd = ["katana", "-u", target, "-retry", "3", "-jc", "-o", output_file]
 
     try:
         spinner = Spinner("Crawling site with Katana...")
