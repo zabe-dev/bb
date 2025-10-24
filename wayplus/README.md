@@ -1,10 +1,11 @@
 # wayplus
 
-Automated web archive analysis tool for security reconnaissance. Fetches historical URLs and performs comprehensive vulnerability pattern detection.
+Automated web archive analysis tool for security reconnaissance. Fetches historical URLs, crawls live sites, and performs comprehensive vulnerability pattern detection.
 
 ## Features
 
 -   Fetches archived URLs from Wayback Machine and other sources
+-   Crawls live sites for active endpoints
 -   Extracts subdomains, parameters, and API endpoints
 -   Identifies sensitive URLs (tokens, keys, sessions, passwords)
 -   Analyzes and decodes JWT tokens from URLs
@@ -22,14 +23,16 @@ pip install requests jwt waymore
 **External Dependencies:**
 
 -   [waymore](https://github.com/xnl-h4ck3r/waymore) - Archive URL fetching
+-   [katana](https://github.com/projectdiscovery/katana) - Live site crawling
 -   [gf](https://github.com/tomnomnom/gf) - Pattern matching for vulnerability detection
 -   [Gf-Patterns](https://github.com/1ndianl33t/Gf-Patterns) - Pre-built pattern files for gf
 
-**Install gf and patterns:**
+**Install external tools:**
 
 ```bash
 go install github.com/tomnomnom/gf@latest
 git clone https://github.com/1ndianl33t/Gf-Patterns ~/.gf
+CGO_ENABLED=1 go install github.com/projectdiscovery/katana/cmd/katana@latest
 ```
 
 ## Usage
@@ -48,6 +51,8 @@ python wayplus.py -d example.com -output results/
 ```
 results/
 ├── example.com_urls.txt          # All archived URLs
+├── example.com_katana.txt        # Crawled URLs
+├── example.com_combined.txt      # Combined unique URLs
 ├── example.com_subdomains.txt    # Discovered subdomains
 ├── example.com_apis.txt          # API endpoints
 ├── example.com_secrets.txt       # URLs with sensitive parameters
