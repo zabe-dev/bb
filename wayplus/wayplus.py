@@ -180,7 +180,41 @@ def fetch_waymore_urls(target, output_dir):
             return [], None
 
     except FileNotFoundError:
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Waymore not installed. Install: pip install waymore")
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Waymore not installed. Run `{Colors.DIM}pipx install git+https://github.com/xnl-h4ck3r/waymore.git{Colors.RESET}` to install.")
+        return [], None
+    except Exception as e:
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Error: {e}")
+        return [], None
+
+def crawl_with_katana(target, output_dir):
+    output_file = f"{output_dir}/{target}_katana.txt"
+
+    target_url = target if target.startswith(('http://', 'https://')) else f"https://{target}"
+
+    cmd = ["katana", "-u", target_url, "-retry", "3", "-jc", "-o", output_file]
+
+    try:
+        spinner = Spinner("Crawling site with Katana...")
+        spinner.start()
+
+        process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL)
+
+        while process.poll() is None:
+            time.sleep(0.3)
+
+        spinner.stop()
+
+        if process.returncode == 0 and os.path.exists(output_file):
+            urls = load_file(output_file)
+            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Crawled {len(urls)} URLs")
+            return urls, output_file
+        else:
+            print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to crawl with Katana")
+            return [], None
+
+    except FileNotFoundError:
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Katana not installed. Run `{Colors.DIM}CGO_ENABLED=1 go install github.com/projectdiscovery/katana/cmd/katana@latest{Colors.RESET}` to install.")
         return [], None
     except Exception as e:
         print(f"[{Colors.RED}ERR{Colors.RESET}] Error: {e}")
@@ -526,6 +560,16 @@ def main():
     if not urls:
         print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to fetch URLs")
         return
+
+    katana_urls, katana_file = crawl_with_katana(target, output_dir)
+
+    if katana_urls:
+        all_urls = list(set(urls + katana_urls))
+        combined_file = f"{output_dir}/{target}_combined.txt"
+        save_file(combined_file, all_urls)
+        print(f"[{Colors.CYAN}INF{Colors.RESET}] Total unique URLs: {len(all_urls)}")
+        urls = all_urls
+        urls_file = combined_file
 
     results = run_automated_analysis(urls, urls_file, target, output_dir)
 
