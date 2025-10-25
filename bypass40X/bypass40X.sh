@@ -88,6 +88,7 @@ process_url() {
     echo ""
     read -r baseline_status baseline_size < <(do_curl "$FULL_URL")
     echo "Target URL: $FULL_URL [$baseline_status] [$baseline_size]"
+    echo ""
 
     local ENCODED_LAST_CHAR=""
     local path_for_encode="$PATH_PART"
@@ -290,6 +291,9 @@ process_url() {
         if [ "$VERBOSE" = true ]; then
             printf "[%s] [%s] %s -X %s %s\n" "$response" "$size" "$url" "$method" "$params"
         else
+            if [[ "$response" == "0000" ]] || [[ "$size" =~ 0000 ]]; then
+                continue
+            fi
             if [ "$response" = "200" ] && [ "$response" != "$baseline_status" ] && [ "$size" != "0" ]; then
                 printf "[%s] [%s] %s -X %s %s\n" "$response" "$size" "$url" "$method" "$params"
             elif [ "$size" != "$baseline_size" ] && [ "$response" != "000" ] && [ "$size" != "0" ]; then
