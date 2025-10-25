@@ -191,7 +191,7 @@ def crawl_with_katana(target, output_dir):
     cmd = ["katana", "-u", target, "-retry", "3", "-jc", "-o", output_file]
 
     try:
-        spinner = Spinner("Crawling live site...")
+        spinner = Spinner("Crawling target site...")
         spinner.start()
 
         process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
@@ -204,7 +204,7 @@ def crawl_with_katana(target, output_dir):
 
         if process.returncode == 0 and os.path.exists(output_file):
             urls = load_file(output_file)
-            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Found {len(urls)} URLs from crawling target")
+            print(f"[{Colors.GREEN}SUC{Colors.RESET}] Found {len(urls)} URLs from crawling")
             return urls, output_file
         else:
             print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to crawl with Katana")
@@ -342,39 +342,41 @@ def extract_parameters(urls):
 
     return results
 
-def scan_for_listings(domain, output_dir, threads=10):
-    parsed_domain = urlparse(domain if '://' in domain else f'https://{domain}')
-    hostname = parsed_domain.hostname or domain
-    base_path = parsed_domain.path.rstrip('/') if parsed_domain.path else ''
+def scan_for_listings(urls, subdomains, output_dir, target, threads=10):
+    paths_by_host = {}
 
-    archive_url = f"https://web.archive.org/cdx/search/cdx?url={hostname}/*&output=txt&fl=original&collapse=urlkey"
+    for url in urls:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname or not parsed.path:
+            continue
 
-    spinner = Spinner("Fetching Wayback URLs")
-    spinner.start()
-    response = retry_request(archive_url, timeout=15)
-    spinner.stop()
+        clean_path = parsed.path.rstrip('/')
+        if not clean_path or Config.STATIC_EXTENSIONS.search(clean_path):
+            continue
 
-    paths = set()
+        if hostname not in paths_by_host:
+            paths_by_host[hostname] = set()
 
-    if response:
-        urls = response.text.splitlines()
-        for url in urls:
-            parsed = urlparse(url)
-            if parsed.hostname == hostname and parsed.path:
-                clean_path = parsed.path.rstrip('/')
-                if clean_path:
-                    paths.add(clean_path)
-                    parts = clean_path.split('/')
-                    for i in range(1, len(parts)):
-                        parent = '/'.join(parts[:i+1])
-                        if parent:
-                            paths.add(parent)
+        parts = clean_path.split('/')
+        depth = len([p for p in parts if p])
 
-    if base_path:
-        paths.add(base_path)
-    paths.add('/')
+        if depth <= 3:
+            paths_by_host[hostname].add(clean_path)
 
-    def check_listing(path):
+            for i in range(1, len(parts)):
+                parent = '/'.join(parts[:i+1])
+                if parent:
+                    parent_depth = len([p for p in parent.split('/') if p])
+                    if parent_depth <= 3:
+                        paths_by_host[hostname].add(parent)
+
+    for subdomain in subdomains:
+        if subdomain not in paths_by_host:
+            paths_by_host[subdomain] = set()
+        paths_by_host[subdomain].add('/')
+
+    def check_listing(hostname, path):
         for scheme in ["https", "http"]:
             full_url = f"{scheme}://{hostname}{path}" if path == '/' else f"{scheme}://{hostname}{path}/"
             try:
@@ -386,14 +388,16 @@ def scan_for_listings(domain, output_dir, threads=10):
         return None
 
     listings = []
+    tasks = [(host, path) for host, paths in paths_by_host.items() for path in paths]
+
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        for result in executor.map(check_listing, paths):
+        results = executor.map(lambda x: check_listing(x[0], x[1]), tasks)
+        for result in results:
             if result:
                 listings.append(result)
 
     if listings:
-        clean_domain = hostname.replace('.', '_')
-        output_path = f"{output_dir}/{clean_domain}_dir_listings.txt"
+        output_path = f"{output_dir}/{target}_dir_listings.txt"
         save_file(output_path, listings)
 
     return listings
@@ -540,7 +544,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
 
     spinner = Spinner("Scanning for directory listings")
     spinner.start()
-    listings = scan_for_listings(target, output_dir)
+    listings = scan_for_listings(urls, subdomains, output_dir, target)
     spinner.stop()
     results["dir_listings"] = len(listings)
     if listings:
@@ -582,7 +586,7 @@ def main():
         all_urls = list(set(urls + katana_urls))
         combined_file = f"{output_dir}/{target}_combined.txt"
         save_file(combined_file, all_urls)
-        print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered total of {len(all_urls)} unique URLs\n")
+        print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs\n")
         urls = all_urls
         urls_file = combined_file
 
