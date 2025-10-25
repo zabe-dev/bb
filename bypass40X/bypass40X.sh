@@ -88,7 +88,6 @@ process_url() {
     echo ""
     read -r baseline_status baseline_size < <(do_curl "$FULL_URL")
     echo "Target URL: $FULL_URL [$baseline_status] [$baseline_size]"
-    echo ""
 
     local ENCODED_LAST_CHAR=""
     local path_for_encode="$PATH_PART"
