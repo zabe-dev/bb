@@ -151,7 +151,7 @@ def retry_request(url, timeout=30):
     return None
 
 def fetch_waymore_urls(target, output_dir):
-    output_file = f"{output_dir}/{target}_urls.txt"
+    output_file = f"{output_dir}/urls.txt"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     cmd = ["waymore", "-mode", "U", "-t", "5", "-p", "2", "-lr", "60",
@@ -186,7 +186,7 @@ def fetch_waymore_urls(target, output_dir):
         return [], None
 
 def crawl_with_katana(target, output_dir):
-    output_file = f"{output_dir}/{target}_katana.txt"
+    output_file = f"{output_dir}/katana.txt"
 
     cmd = ["katana", "-u", target, "-retry", "3", "-jc", "-o", output_file]
 
@@ -219,7 +219,7 @@ def crawl_with_katana(target, output_dir):
 
 def gf_pattern_match(urls_file, pattern, output_dir, target):
     try:
-        output_path = f"{output_dir}/{target}_{pattern}.txt"
+        output_path = f"{output_dir}/{pattern}.txt"
 
         with open(urls_file, 'r') as f:
             result = subprocess.run(['gf', pattern], stdin=f, capture_output=True, text=True)
@@ -257,7 +257,7 @@ def fetch_compressed_files_urls(target, output_dir, extensions=None):
             all_urls.append(url)
 
     if all_urls:
-        compressed_path = f"{output_dir}/{target}_compressed.txt"
+        compressed_path = f"{output_dir}/compressed.txt"
         save_file(compressed_path, all_urls)
 
     return all_urls
@@ -307,7 +307,7 @@ def analyze_jwts_from_urls(urls, output_dir, target):
             continue
 
     if results:
-        jwt_path = f"{output_dir}/{target}_jwt.json"
+        jwt_path = f"{output_dir}/jwt.json"
         with open(jwt_path, "w") as f:
             json.dump(results, f, indent=2)
         return len(results)
@@ -397,7 +397,7 @@ def scan_for_listings(urls, subdomains, output_dir, target, threads=10):
                 listings.append(result)
 
     if listings:
-        output_path = f"{output_dir}/{target}_dir_listings.txt"
+        output_path = f"{output_dir}/dir_listings.txt"
         save_file(output_path, listings)
 
     return listings
@@ -410,7 +410,7 @@ def extract_secret_urls(urls, output_dir, target):
     secret = [url for url in urls if Config.SECRET_PARAMS.search(url)]
 
     if secret:
-        output_path = f"{output_dir}/{target}_secrets.txt"
+        output_path = f"{output_dir}/secrets.txt"
         save_file(output_path, secret)
 
     return secret
@@ -420,7 +420,7 @@ def extract_api_urls(urls, output_dir, target):
                 if Config.API_PATTERNS.search(url) and not Config.STATIC_EXTENSIONS.search(url)]
 
     if api_urls:
-        output_path = f"{output_dir}/{target}_apis.txt"
+        output_path = f"{output_dir}/apis.txt"
         save_file(output_path, api_urls)
 
     return api_urls
@@ -429,7 +429,7 @@ def extract_static_urls(urls, output_dir, target):
     static_urls = [url for url in urls if Config.STATIC_EXTENSIONS.search(url)]
 
     if static_urls:
-        output_path = f"{output_dir}/{target}_static.txt"
+        output_path = f"{output_dir}/static.txt"
         save_file(output_path, static_urls)
 
     return static_urls
@@ -442,7 +442,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     subdomains = extract_subdomains_from_urls(urls, target)
     spinner.stop()
     if subdomains:
-        save_file(f"{output_dir}/{target}_subdomains.txt", subdomains)
+        save_file(f"{output_dir}/subdomains.txt", subdomains)
         results["subdomains"] = len(subdomains)
         print(f"[{Colors.GREEN}+{Colors.RESET}] Subdomains: {len(subdomains)} found")
     else:
@@ -453,7 +453,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     params = extract_parameters(urls)
     spinner.stop()
     if params:
-        save_file(f"{output_dir}/{target}_parameters.txt", params)
+        save_file(f"{output_dir}/parameters.txt", params)
         results["parameters"] = len(params)
         print(f"[{Colors.GREEN}+{Colors.RESET}] Parameters: {len(params)} found")
     else:
@@ -494,7 +494,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     json_urls = find_keyword(urls, "json")
     spinner.stop()
     if json_urls:
-        save_file(f"{output_dir}/{target}_json.txt", json_urls)
+        save_file(f"{output_dir}/json.txt", json_urls)
         results["json"] = len(json_urls)
         print(f"[{Colors.GREEN}+{Colors.RESET}] JSON URLs: {len(json_urls)} found")
     else:
@@ -505,7 +505,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     config_urls = find_keyword(urls, "conf")
     spinner.stop()
     if config_urls:
-        save_file(f"{output_dir}/{target}_config.txt", config_urls)
+        save_file(f"{output_dir}/config.txt", config_urls)
         results["config"] = len(config_urls)
         print(f"[{Colors.GREEN}+{Colors.RESET}] Config URLs: {len(config_urls)} found")
     else:
@@ -584,7 +584,7 @@ def main():
 
     if katana_urls:
         all_urls = list(set(urls + katana_urls))
-        combined_file = f"{output_dir}/{target}_combined.txt"
+        combined_file = f"{output_dir}/combined.txt"
         save_file(combined_file, all_urls)
         print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs\n")
         urls = all_urls
