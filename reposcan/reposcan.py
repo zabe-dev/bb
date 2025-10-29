@@ -178,25 +178,52 @@ class GitHubClient:
     def rotate(self):
         self.idx += 1
 
-    def request(self, url: str) -> Dict:
+    def request(self, url: str, retry_on_rate_limit: bool = True) -> Dict:
         if not self.token:
             raise Exception("No token")
         headers = {'Authorization': f'token {self.token}', 'Accept': 'application/vnd.github.v3+json'}
-        response = requests.get(url, headers=headers, timeout=10)
+
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+        except requests.RequestException as e:
+            raise Exception(f"Request failed: {str(e)}")
+
         if response.status_code == 403 and response.headers.get('X-RateLimit-Remaining') == '0':
-            self.rotate()
-            raise Exception("Rate limit")
+            if retry_on_rate_limit and len(self.tokens) > 1:
+                self.rotate()
+                return self.request(url, retry_on_rate_limit=False)
+            raise Exception("Rate limit exceeded")
+
+        if response.status_code == 404:
+            raise Exception("Not found: 404")
+
         if not response.ok:
             raise Exception(f"API error: {response.status_code}")
+
         return response.json()
 
     def raw(self, url: str) -> str:
         if not self.token:
             raise Exception("No token")
         headers = {'Authorization': f'token {self.token}', 'Accept': 'application/vnd.github.v3.raw'}
-        response = requests.get(url, headers=headers, timeout=10)
+
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+        except requests.RequestException as e:
+            raise Exception(f"Request failed: {str(e)}")
+
+        if response.status_code == 403 and response.headers.get('X-RateLimit-Remaining') == '0':
+            if len(self.tokens) > 1:
+                self.rotate()
+                return self.raw(url)
+            raise Exception("Rate limit exceeded")
+
+        if response.status_code == 404:
+            raise Exception("Not found: 404")
+
         if not response.ok:
             raise Exception(f"API error: {response.status_code}")
+
         return response.text
 
     def get_org_repos(self, org: str, page: int = 1) -> List[Dict]:
@@ -215,11 +242,29 @@ class GitHubClient:
         return self.request(f'https://api.github.com/repos/{owner}/{repo}/commits?page={page}&per_page=100')
 
     def check_user(self, username: str) -> bool:
-        try:
-            self.request(f'https://api.github.com/users/{username}')
+        if not self.token:
             return True
-        except:
-            return False
+
+        headers = {'Authorization': f'token {self.token}', 'Accept': 'application/vnd.github.v3+json'}
+
+        try:
+            response = requests.get(f'https://api.github.com/users/{username}', headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                return True
+
+            if response.status_code == 404:
+                return False
+
+            if response.status_code == 403 and response.headers.get('X-RateLimit-Remaining') == '0':
+                if len(self.tokens) > 1:
+                    self.rotate()
+                    return self.check_user(username)
+
+            return True
+
+        except requests.RequestException:
+            return True
 
 def log(msg_type: str, message: str, repo: str = None, spinner: Optional[Spinner] = None):
     icons = {
@@ -639,13 +684,12 @@ def main():
             full = f"{org}/{repo['name']}"
             vulns = len(db.get_vulnerabilities(full))
             results['organizations'][org].append({'repository': repo['name'], 'vulnerabilities': vulns})
-        print()
 
     elapsed = time.time() - START_TIME
+    log('success', f"Scan completed {Colors.DIM}({elapsed:.1f}s time elapsed){Colors.RESET}")
     print_stats(stats)
     if args.output:
         save_json_output(args.output, results, elapsed)
-    log('info', f"Scan completed {Colors.DIM}({elapsed:.1f}s time elapsed){Colors.RESET}")
     db.close()
 
 if __name__ == "__main__":
