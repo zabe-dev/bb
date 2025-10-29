@@ -89,7 +89,7 @@ def print_banner():
  _ _       _        _               _
 | (_)_ __ | | _____| |__   ___  ___| | __
 | | | '_ \| |/ / __| '_ \ / _ \/ __| |/ /
-| | | | | |   < (__| | | |  __/ (__|   <
+| | | | | |   < (__| | | |  __/ (__|
 |_|_|_| |_|_|\_\___|_| |_|\___|\___|_|\_\
 {Colors.RESET}
 {Colors.DIM}    Broken Link Crawler v{VERSION}{Colors.RESET}
@@ -217,7 +217,7 @@ def crawl_and_check_links(base_url, max_depth=3, show_url=False, spinner=None):
 
                 if link_domain != base_domain:
                     check_link(full_url, url, link_text, headers, skip_facebook, broken_links, stats)
-                elif not href.endswith(('.jpg', '.jpeg', '.png', '.gif', '.svg', '.css', '.js', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) and not href.startswith(('mailto:', 'tel:', '#')):
+                elif not href.endswith(('.jpg', '.jpeg', '.png', '.gif', '.svg', '.css', '.js', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.xml')) and not href.startswith(('mailto:', 'tel:', '#')):
                     crawl(full_url, depth + 1)
 
         except requests.RequestException:
@@ -284,7 +284,7 @@ def print_results(broken_links, stats):
     print(f"[{Colors.CYAN}INF{Colors.RESET}] Broken links: {stats['broken']}")
 
     if stats['broken'] > 0:
-        print(f"{Colors.BOLD}Broken Links Summary:{Colors.RESET}")
+        print(f"\n{Colors.BOLD}Broken Links Summary:{Colors.RESET}")
         for link in broken_links:
             status_color = Colors.RED if link['status_code'] == 404 else Colors.ORANGE
             print(f"{status_color}[{link['status_code']}]{Colors.RESET} {link['url']}")
