@@ -1,0 +1,22 @@
+# GitHub API tokens
+github_tokens:
+    - ghp_xxx...
+
+# Database file path
+database: reposcan.db
+
+# Discord webhook
+discord_webhook: https://discord.com/api/webhooks/xxx/xxx
+
+# Enable/disable modules
+enable_fork_tracking: true
+enable_dependency_check: true
+enable_link_check: true
+enable_takeover_scan: true
+enable_sensitive_files: true
+
+# Only alert on new issues
+alert_only_new_issues: true
+
+# Enable Discord notifications
+enable_discord: true
