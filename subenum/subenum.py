@@ -194,23 +194,19 @@ def run_chaos(domain, output_file):
     return run_command(cmd, output_file, "Running chaos...")
 
 def run_shuffledns(domain, resolvers, wordlist, output_file):
-    if not os.path.exists(resolvers):
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Running shuffledns... Resolvers file not found")
-        return 0
-
     if not os.path.exists(wordlist):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Running shuffledns... Wordlist file not found")
         return 0
 
-    cmd = ["shuffledns", "-d", domain, "-r", resolvers, "-w", wordlist,
+    cmd = ["shuffledns", "-d", domain, "-w", wordlist,
            "-mode", "bruteforce", "-silent", "-o", output_file]
+
+    if resolvers and os.path.exists(resolvers):
+        cmd.extend(["-r", resolvers])
+
     return run_command(cmd, output_file, "Running shuffledns...", timeout=3600)
 
 def run_port_scan(domains_file, resolvers, output_file, width):
-    if not os.path.exists(resolvers):
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Resolvers file not found")
-        return 0
-
     if not os.path.exists(domains_file):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Scanning for open ports... Domains file not found")
         return 0
@@ -223,7 +219,11 @@ def run_port_scan(domains_file, resolvers, output_file, width):
     spinner.start()
 
     try:
-        cmd = f"cat {domains_file} | dnsx -silent -r {resolvers} -a -resp-only | naabu -silent -tp {width} > {output_file}"
+        if resolvers and os.path.exists(resolvers):
+            cmd = f"cat {domains_file} | dnsx -silent -r {resolvers} -a -resp-only | naabu -silent -tp {width} > {output_file}"
+        else:
+            cmd = f"cat {domains_file} | dnsx -silent -a -resp-only | naabu -silent -tp {width} > {output_file}"
+
         subprocess.run(cmd, shell=True, timeout=3600, stderr=subprocess.DEVNULL)
 
         spinner.stop()
@@ -400,12 +400,8 @@ def main():
     print_banner()
     START_TIME = time.time()
 
-    if args.sd and (not args.r or not args.w):
-        print(f"[{Colors.RED}ERR{Colors.RESET}] shuffledns requires -r and -w flags")
-        sys.exit(1)
-
-    if args.ps and not args.r:
-        print(f"[{Colors.RED}ERR{Colors.RESET}] Port scan requires -r flag")
+    if args.sd and not args.w:
+        print(f"[{Colors.RED}ERR{Colors.RESET}] shuffledns requires -w flag")
         sys.exit(1)
 
     if args.ps and args.ps not in ["100", "1000", "full"]:

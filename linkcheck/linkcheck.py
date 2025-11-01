@@ -7,11 +7,14 @@ import signal
 import sys
 import threading
 import time
+import warnings
 from urllib.parse import urljoin
 
 import requests
 import tldextract
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 VERSION = "1.0"
 START_TIME = None
@@ -191,7 +194,7 @@ def crawl_and_check_links(base_url, max_depth=3, show_url=False, spinner=None):
             if response.status_code != 200:
                 return
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(response.text, "lxml")
             for link in soup.find_all("a", href=True):
                 if INTERRUPTED:
                     return

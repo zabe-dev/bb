@@ -9,7 +9,8 @@ import sqlite3
 import sys
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 import yaml
@@ -82,7 +83,7 @@ def signal_handler(signum, frame):
     sys.stdout.flush()
     elapsed = (time.time() - START_TIME) if START_TIME else 0
     current_time = time.strftime('%H:%M:%S')
-    print(f"\n\n{Colors.DIM}[{current_time}]{Colors.RESET} {Colors.ORANGE}[WRN]{Colors.RESET} Scan interrupted {Colors.DIM}({elapsed:.1f}s time elapsed){Colors.RESET}")
+    print(f"\n\n{Colors.DIM}[{current_time}]{Colors.RESET} [{Colors.ORANGE}WRN{Colors.RESET}] Scan interrupted {Colors.DIM}({elapsed:.1f}s time elapsed){Colors.RESET}")
     sys.exit(130)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -182,7 +183,6 @@ class GitHubClient:
         if not self.token:
             raise Exception("No token")
         headers = {'Authorization': f'token {self.token}', 'Accept': 'application/vnd.github.v3+json'}
-
         try:
             response = requests.get(url, headers=headers, timeout=10)
         except requests.RequestException as e:
@@ -193,20 +193,16 @@ class GitHubClient:
                 self.rotate()
                 return self.request(url, retry_on_rate_limit=False)
             raise Exception("Rate limit exceeded")
-
         if response.status_code == 404:
             raise Exception("Not found: 404")
-
         if not response.ok:
             raise Exception(f"API error: {response.status_code}")
-
         return response.json()
 
     def raw(self, url: str) -> str:
         if not self.token:
             raise Exception("No token")
         headers = {'Authorization': f'token {self.token}', 'Accept': 'application/vnd.github.v3.raw'}
-
         try:
             response = requests.get(url, headers=headers, timeout=10)
         except requests.RequestException as e:
@@ -217,13 +213,10 @@ class GitHubClient:
                 self.rotate()
                 return self.raw(url)
             raise Exception("Rate limit exceeded")
-
         if response.status_code == 404:
             raise Exception("Not found: 404")
-
         if not response.ok:
             raise Exception(f"API error: {response.status_code}")
-
         return response.text
 
     def get_org_repos(self, org: str, page: int = 1) -> List[Dict]:
@@ -244,25 +237,18 @@ class GitHubClient:
     def check_user(self, username: str) -> bool:
         if not self.token:
             return True
-
         headers = {'Authorization': f'token {self.token}', 'Accept': 'application/vnd.github.v3+json'}
-
         try:
             response = requests.get(f'https://api.github.com/users/{username}', headers=headers, timeout=10)
-
             if response.status_code == 200:
                 return True
-
             if response.status_code == 404:
                 return False
-
             if response.status_code == 403 and response.headers.get('X-RateLimit-Remaining') == '0':
                 if len(self.tokens) > 1:
                     self.rotate()
                     return self.check_user(username)
-
             return True
-
         except requests.RequestException:
             return True
 
@@ -279,19 +265,15 @@ def log(msg_type: str, message: str, repo: str = None, spinner: Optional[Spinner
         'sensitive': ('sensitive-file', Colors.PINK),
         'scan': ('INF', Colors.CYAN)
     }
-
     label, color = icons.get(msg_type, ('INF', Colors.CYAN))
 
     if spinner:
         spinner.pause()
-
     timestamp = time.strftime('%H:%M:%S')
-
     if repo:
         print(f"{Colors.DIM}[{timestamp}]{Colors.RESET} [{color}{label}{Colors.RESET}] [{repo}] {message}")
     else:
         print(f"{Colors.DIM}[{timestamp}]{Colors.RESET} [{color}{label}{Colors.RESET}] {message}")
-
     if spinner:
         spinner.resume()
 
@@ -302,57 +284,150 @@ def check_npm_package(name: str) -> bool:
     except:
         return False
 
-def check_url(url: str) -> bool:
+def check_url(url: str, timeout: int = 10) -> Tuple[bool, Optional[str]]:
+    parsed = urlparse(url)
+    if parsed.scheme not in ['http', 'https']:
+        return True, None
+    if not parsed.netloc:
+        return True, None
+
+    netloc = parsed.netloc.lower()
+    if (netloc in ('localhost', '127.0.0.1', '[::1]') or
+        netloc.startswith(('localhost:', '127.0.0.1:', '[::1]:')) or
+        netloc.startswith('192.168.') or
+        netloc.startswith('10.') or
+        (netloc.startswith('172.') and '.' in netloc.split('.', 2)[1] and
+         16 <= int(netloc.split('.')[1]) <= 31)):
+        return True, None
+
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+        'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1'
+    ]
+
+    import random
+    headers = {
+        'User-Agent': random.choice(user_agents)
+    }
+
     try:
-        r = requests.head(url, timeout=5, allow_redirects=True)
-        return r.ok
-    except:
-        return False
+        response = requests.head(url, headers=headers, timeout=timeout,
+                                 allow_redirects=True, verify=True)
+
+        if 200 <= response.status_code < 400:
+            return True, None
+
+        if response.status_code in (403, 405, 501):
+            response = requests.get(url, headers=headers, timeout=timeout,
+                                    allow_redirects=True, stream=True, verify=True)
+            response.close()
+            if 200 <= response.status_code < 400:
+                return True, None
+
+        if response.status_code == 404:
+            return False, "404 Not Found"
+        if response.status_code == 410:
+            return False, "410 Gone"
+        if response.status_code >= 500:
+            return True, None
+        return False, f"HTTP {response.status_code}"
+
+    except requests.exceptions.SSLError:
+        return False, "SSL Certificate Error"
+    except requests.exceptions.TooManyRedirects:
+        return False, "Too Many Redirects"
+    except requests.exceptions.Timeout:
+        return True, None
+    except requests.exceptions.ConnectionError as e:
+        msg = str(e).lower()
+        if 'name or service not known' in msg or 'failed to resolve' in msg:
+            return False, "DNS Resolution Failed"
+        if 'connection refused' in msg:
+            return False, "Connection Refused"
+        return True, None
+    except requests.exceptions.RequestException:
+        return True, None
+    except Exception:
+        return True, None
 
 def extract_urls(text: str) -> List[str]:
-    return list(set(re.findall(r'https?://[^\s\)\]\}]+', text)))
+    pattern = r'https?://[^\s\)\]\}\'"<>]+'
+    urls = re.findall(pattern, text)
+    cleaned = []
+    for u in urls:
+        u = u.rstrip('.,;:!?')
+        u = u.rstrip(')')
+        cleaned.append(u)
+    return list(set(cleaned))
 
 def extract_usernames(text: str) -> List[str]:
     return list(set(re.findall(r'@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?)', text)))
 
-def send_discord_webhook(webhook_url: str, vuln_type: str, org: str, repo: str, details: str, severity: str, file_path: str = None, extra_info: Dict = None):
+def send_discord_webhook(webhook_url: str, vuln_type: str, org: str, repo: str,
+                         details: str, severity: str, file_path: str = None,
+                         extra_info: Dict = None):
     if not webhook_url:
         return
 
     colors = {'critical': 15158332, 'high': 15105570, 'medium': 16776960, 'low': 3447003}
+    severity_emojis = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🔵'}
 
-    severity_emoji = {
-        'critical': '🔴',
-        'high': '🟠',
-        'medium': '🟡',
-        'low': '🔵'
+    type_emojis = {
+        'New Forks Detected': '🍴',
+        'Repository Visibility Change': '👁️',
+        'Dependency Confusion Risk': '📦',
+        'Broken Link Detected': '🔗',
+        'Username Takeover Risk': '👤',
+        'Sensitive File Exposed': '🔑'
     }
 
     full_name = f"{org}/{repo}"
     repo_url = f"https://github.com/{full_name}"
 
+    title_emoji = type_emojis.get(vuln_type, '⚠️')
+    severity_badge = f"{severity_emojis.get(severity, '⚪')} **{severity.upper()}**"
+
     fields = [
-        {'name': '📦 Repository', 'value': f"[{full_name}]({repo_url})", 'inline': True},
-        {'name': '⚠️ Severity', 'value': f"{severity_emoji.get(severity, '⚪')} {severity.upper()}", 'inline': True},
-        {'name': '🕐 Detected', 'value': f"<t:{int(time.time())}:R>", 'inline': True}
+        {'name': f'📂 Repository', 'value': f"[`{full_name}`]({repo_url})", 'inline': True},
+        {'name': f'🎯 Severity', 'value': severity_badge, 'inline': True},
+        {'name': f'🕐 Detected', 'value': f"<t:{int(time.time())}:R>", 'inline': True}
     ]
 
     if file_path:
         file_url = f"{repo_url}/blob/main/{file_path}"
-        fields.append({'name': '📄 File', 'value': f"[{file_path}]({file_url})", 'inline': False})
+        fields.append({'name': '📄 File', 'value': f"[`{file_path}`]({file_url})", 'inline': False})
 
     if extra_info:
-        for key, value in extra_info.items():
-            fields.append({'name': key, 'value': value, 'inline': False})
+        for k, v in extra_info.items():
+            field_emojis = {
+                'New Forks': '🍴',
+                'Warning': '⚠️',
+                'Package': '📦',
+                'Risk': '⚡',
+                'URL': '🔗',
+                'Location': '📍',
+                'Error': '❌',
+                'Username': '👤',
+                'Pattern': '🔍'
+            }
+            field_emoji = field_emojis.get(k, '•')
+            fields.append({'name': f'{field_emoji} {k}', 'value': v, 'inline': False})
 
-    fields.append({'name': '🔍 Details', 'value': f"```{details}```", 'inline': False})
+    fields.append({'name': '📋 Details', 'value': f"```{details}```", 'inline': False})
 
     embed = {
-        'title': f"🚨 {vuln_type}",
-        'description': f"Security issue detected in **{full_name}**",
+        'title': f"{title_emoji} {vuln_type}",
         'color': colors.get(severity, colors['medium']),
         'fields': fields,
-        'footer': {'text': f"reposcan v{VERSION}"},
+        'footer': {'text': f"🔍 reposcan v{VERSION}"},
         'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S.000Z')
     }
 
@@ -361,7 +436,8 @@ def send_discord_webhook(webhook_url: str, vuln_type: str, org: str, repo: str, 
     except:
         pass
 
-def scan_forks(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, config: Dict, stats: Dict, spinner: Optional[Spinner]):
+def scan_forks(client: GitHubClient, db: SecurityDB, org: str, repo: Dict,
+               config: Dict, stats: Dict, spinner: Optional[Spinner]):
     if not config.get('enable_fork_tracking', True):
         return
     full_name = f"{org}/{repo['name']}"
@@ -376,37 +452,65 @@ def scan_forks(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, confi
             page += 1
         except:
             break
+
     stored = db.get_repository(full_name)
     old_forks = db.get_forks_by_parent(full_name) if stored else []
     is_first = not stored
-    db.save_repository({'id': repo['id'], 'full_name': full_name, 'org': org, 'name': repo['name'], 'private': repo.get('private', False), 'fork_count': len(forks), 'last_scanned': int(time.time())})
+
+    db.save_repository({
+        'id': repo['id'],
+        'full_name': full_name,
+        'org': org,
+        'name': repo['name'],
+        'private': repo.get('private', False),
+        'fork_count': len(forks),
+        'last_scanned': int(time.time())
+    })
+
     if not is_first:
         new = [f for f in forks if not any(o['id'] == f['id'] for o in old_forks)]
         if new:
             fork_list = [f"{f['owner']['login']}/{f['name']}" for f in new[:3]]
-            fork_display = ', '.join(fork_list)
+            display = ', '.join(fork_list)
             if len(new) > 3:
-                fork_display += f" +{len(new)-3} more"
-            log('fork', f"{len(new)} new fork(s): {fork_display}", full_name, spinner)
-            db.save_vulnerability({'repo_full_name': full_name, 'type': 'new_forks', 'severity': 'medium', 'details': f"{len(new)} new forks detected", 'timestamp': int(time.time())})
+                display += f" +{len(new)-3} more"
+            log('fork', f"{len(new)} new fork(s): {display}", full_name, spinner)
+
+            details = f"{len(new)} new forks detected"
+            db.save_vulnerability({'repo_full_name': full_name, 'type': 'new_forks',
+                                   'severity': 'medium', 'details': details,
+                                   'timestamp': int(time.time())})
+
             if config.get('enable_discord'):
-                extra_info = {'🌿 New Forks': ', '.join([f"`{f['owner']['login']}/{f['name']}`" for f in new[:5]])}
+                extra = {'New Forks': ', '.join([f"`{f['owner']['login']}/{f['name']}`" for f in new[:5]])}
                 if len(new) > 5:
-                    extra_info['🌿 New Forks'] += f"\n... and {len(new)-5} more"
-                send_discord_webhook(config['discord_webhook'], 'New Forks Detected', org, repo['name'], f"{len(new)} new fork(s) detected", 'medium', extra_info=extra_info)
+                    extra['New Forks'] += f"\n... and {len(new)-5} more"
+                send_discord_webhook(config['discord_webhook'], 'New Forks Detected',
+                                     org, repo['name'], details, 'medium',
+                                     extra_info=extra)
             stats['fork_changes'] += 1
             stats['total_issues'] += 1
+
     if stored and stored['private'] and not repo.get('private', False):
-        log('fork', f"visibility changed: PRIVATE → PUBLIC", full_name, spinner)
-        db.save_vulnerability({'repo_full_name': full_name, 'type': 'visibility', 'severity': 'critical', 'details': 'Repository changed from private to public', 'timestamp': int(time.time())})
+        log('fork', "visibility changed: PRIVATE → PUBLIC", full_name, spinner)
+        details = "Repository changed from private to public"
+        db.save_vulnerability({'repo_full_name': full_name, 'type': 'visibility',
+                               'severity': 'critical', 'details': details,
+                               'timestamp': int(time.time())})
         if config.get('enable_discord'):
-            send_discord_webhook(config['discord_webhook'], 'Repository Visibility Change', org, repo['name'], 'Repository is now PUBLIC (was private)', 'critical', extra_info={'⚠️ Warning': 'Private repository is now publicly accessible'})
+            send_discord_webhook(config['discord_webhook'], 'Repository Visibility Change',
+                                 org, repo['name'], details, 'critical',
+                                 extra_info={'Warning': 'Previously private repository is now publicly accessible'})
         stats['fork_changes'] += 1
         stats['total_issues'] += 1
-    for f in forks:
-        db.save_fork({'id': f['id'], 'parent_repo': full_name, 'owner': f['owner']['login'], 'name': f['name'], 'created_at': f['created_at'], 'updated_at': f['updated_at']})
 
-def scan_dependencies(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, config: Dict, stats: Dict, spinner: Optional[Spinner]):
+    for f in forks:
+        db.save_fork({'id': f['id'], 'parent_repo': full_name,
+                      'owner': f['owner']['login'], 'name': f['name'],
+                      'created_at': f['created_at'], 'updated_at': f['updated_at']})
+
+def scan_dependencies(client: GitHubClient, db: SecurityDB, org: str, repo: Dict,
+                     config: Dict, stats: Dict, spinner: Optional[Spinner]):
     if not config.get('enable_dependency_check', True):
         return
     full_name = f"{org}/{repo['name']}"
@@ -417,46 +521,74 @@ def scan_dependencies(client: GitHubClient, db: SecurityDB, org: str, repo: Dict
     deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
     if not deps:
         return
+
     for name, ver in deps.items():
         if INTERRUPTED:
             break
         stats['npm_packages'] += 1
         if not check_npm_package(name):
             details = f"{name}@{ver}"
-            if not config.get('alert_only_new_issues', True) or not db.has_vulnerability(full_name, 'dependency_confusion', details):
+            if not config.get('alert_only_new_issues', True) or \
+               not db.has_vulnerability(full_name, 'dependency_confusion', details):
                 log('dependency', f"{name}@{ver}", full_name, spinner)
-                db.save_vulnerability({'repo_full_name': full_name, 'type': 'dependency_confusion', 'severity': 'high', 'details': details, 'timestamp': int(time.time())})
+                db.save_vulnerability({'repo_full_name': full_name,
+                                       'type': 'dependency_confusion',
+                                       'severity': 'high',
+                                       'details': details,
+                                       'timestamp': int(time.time())})
                 if config.get('enable_discord'):
-                    send_discord_webhook(config['discord_webhook'], 'Dependency Confusion Risk', org, repo['name'], f"Package {name}@{ver} not found in npm registry", 'high', 'package.json', extra_info={'📦 Package': f"`{name}@{ver}`", '⚠️ Risk': 'Potential dependency confusion attack vector'})
+                    send_discord_webhook(config['discord_webhook'],
+                                         'Dependency Confusion Risk',
+                                         org, repo['name'],
+                                         f"Package not found in npm registry",
+                                         'high', 'package.json',
+                                         extra_info={'Package': f"`{name}@{ver}`",
+                                                     'Risk': 'Potential dependency confusion attack vector'})
                 stats['dependencies'] += 1
                 stats['total_issues'] += 1
 
-def scan_links(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, config: Dict, stats: Dict, spinner: Optional[Spinner]):
+def scan_links(client: GitHubClient, db: SecurityDB, org: str, repo: Dict,
+               config: Dict, stats: Dict, spinner: Optional[Spinner]):
     if not config.get('enable_link_check', True):
         return
     full_name = f"{org}/{repo['name']}"
-    for fname in ['README.md', 'README']:
+
+    for fname in ['README.md', 'README', 'README.rst', 'README.txt']:
         try:
             text = client.get_file(org, repo['name'], fname)
-            urls = extract_urls(text)[:10]
-            for url in urls:
+            urls = extract_urls(text)
+            for url in urls[:20]:
                 if INTERRUPTED:
                     break
                 stats['links_checked'] += 1
-                if not check_url(url):
-                    details = f"{fname}: {url}"
-                    if not config.get('alert_only_new_issues', True) or not db.has_vulnerability(full_name, 'broken_link', details):
-                        log('link', f"{url}", full_name, spinner)
-                        db.save_vulnerability({'repo_full_name': full_name, 'type': 'broken_link', 'severity': 'low', 'details': details, 'timestamp': int(time.time())})
+                ok, reason = check_url(url)
+                if not ok:
+                    details = f"{fname}: {url} ({reason})"
+                    if not config.get('alert_only_new_issues', True) or \
+                       not db.has_vulnerability(full_name, 'broken_link', details):
+                        log('link', f"{url} - {reason}", full_name, spinner)
+                        db.save_vulnerability({'repo_full_name': full_name,
+                                               'type': 'broken_link',
+                                               'severity': 'low',
+                                               'details': details,
+                                               'timestamp': int(time.time())})
                         if config.get('enable_discord'):
-                            send_discord_webhook(config['discord_webhook'], 'Broken Link Detected', org, repo['name'], url, 'low', fname, extra_info={'🔗 URL': f"`{url}`", '📄 Location': f"`{fname}`"})
+                            send_discord_webhook(config['discord_webhook'],
+                                                 'Broken Link Detected',
+                                                 org, repo['name'],
+                                                 f"Unreachable URL found",
+                                                 'low', fname,
+                                                 extra_info={'URL': f"`{url}`",
+                                                             'Location': f"`{fname}`",
+                                                             'Error': reason})
                         stats['broken_links'] += 1
                         stats['total_issues'] += 1
             break
-        except:
+        except Exception:
             continue
 
-def scan_takeover(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, config: Dict, stats: Dict, spinner: Optional[Spinner]):
+def scan_takeover(client: GitHubClient, db: SecurityDB, org: str, repo: Dict,
+                  config: Dict, stats: Dict, spinner: Optional[Spinner]):
     if not config.get('enable_takeover_scan', True):
         return
     full_name = f"{org}/{repo['name']}"
@@ -476,26 +608,40 @@ def scan_takeover(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, co
         users.update(extract_usernames(client.get_file(org, repo['name'], 'README.md')))
     except:
         pass
+
     for u in list(users)[:20]:
         if INTERRUPTED:
             break
         stats['users_checked'] += 1
         if not client.check_user(u):
             details = f"@{u}"
-            if not config.get('alert_only_new_issues', True) or not db.has_vulnerability(full_name, 'username_takeover', details):
+            if not config.get('alert_only_new_issues', True) or \
+               not db.has_vulnerability(full_name, 'username_takeover', details):
                 log('takeover', f"@{u}", full_name, spinner)
-                db.save_vulnerability({'repo_full_name': full_name, 'type': 'username_takeover', 'severity': 'high', 'details': details, 'timestamp': int(time.time())})
+                db.save_vulnerability({'repo_full_name': full_name,
+                                       'type': 'username_takeover',
+                                       'severity': 'high',
+                                       'details': details,
+                                       'timestamp': int(time.time())})
                 if config.get('enable_discord'):
-                    send_discord_webhook(config['discord_webhook'], 'Username Takeover Risk', org, repo['name'], f"Username @{u} is available for registration", 'high', extra_info={'👤 Username': f"`@{u}`", '⚠️ Risk': 'Attacker could register this username and impersonate contributor'})
+                    send_discord_webhook(config['discord_webhook'],
+                                         'Username Takeover Risk',
+                                         org, repo['name'],
+                                         f"Username @{u} is available for registration",
+                                         'high',
+                                         extra_info={'Username': f"`@{u}`",
+                                                     'Risk': 'Attacker could register this username and impersonate contributor'})
                 stats['takeovers'] += 1
                 stats['total_issues'] += 1
 
-def scan_sensitive_files(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, config: Dict, stats: Dict, spinner: Optional[Spinner]):
+def scan_sensitive_files(client: GitHubClient, db: SecurityDB, org: str, repo: Dict,
+                         config: Dict, stats: Dict, spinner: Optional[Spinner]):
     if not config.get('enable_sensitive_files', True):
         return
     full_name = f"{org}/{repo['name']}"
     patterns = ['.env', '.pem', '.p12', '.npmrc', 'id_rsa', '.key', 'password', 'token']
     exclude = ['test', 'demo', 'example']
+
     def walk(items, path="", depth=0):
         if depth > 3 or INTERRUPTED:
             return
@@ -509,11 +655,22 @@ def scan_sensitive_files(client: GitHubClient, db: SecurityDB, org: str, repo: D
                 for p in patterns:
                     if p in i['name'].lower():
                         details = f"{ip} ({p})"
-                        if not config.get('alert_only_new_issues', True) or not db.has_vulnerability(full_name, 'sensitive_file', details):
+                        if not config.get('alert_only_new_issues', True) or \
+                           not db.has_vulnerability(full_name, 'sensitive_file', details):
                             log('sensitive', f"{ip}", full_name, spinner)
-                            db.save_vulnerability({'repo_full_name': full_name, 'type': 'sensitive_file', 'severity': 'critical', 'details': details, 'timestamp': int(time.time())})
+                            db.save_vulnerability({'repo_full_name': full_name,
+                                                   'type': 'sensitive_file',
+                                                   'severity': 'critical',
+                                                   'details': details,
+                                                   'timestamp': int(time.time())})
                             if config.get('enable_discord'):
-                                send_discord_webhook(config['discord_webhook'], 'Sensitive File Exposed', org, repo['name'], f"Potentially sensitive file found: {ip}", 'critical', ip, extra_info={'🔑 Pattern': f"`{p}`", '⚠️ Risk': 'May contain credentials or private keys'})
+                                send_discord_webhook(config['discord_webhook'],
+                                                     'Sensitive File Exposed',
+                                                     org, repo['name'],
+                                                     f"Potentially sensitive file detected",
+                                                     'critical', ip,
+                                                     extra_info={'Pattern': f"`{p}`",
+                                                                 'Risk': 'May contain credentials or private keys'})
                             stats['sensitive_files'] += 1
                             stats['total_issues'] += 1
                         break
@@ -522,12 +679,14 @@ def scan_sensitive_files(client: GitHubClient, db: SecurityDB, org: str, repo: D
                     walk(client.get_repo_contents(org, repo['name'], ip), ip, depth+1)
                 except:
                     pass
+
     try:
         walk(client.get_repo_contents(org, repo['name'], ''))
     except:
         pass
 
-def scan_repository(client: GitHubClient, db: SecurityDB, org: str, repo: Dict, config: Dict, stats: Dict, spinner: Optional[Spinner]):
+def scan_repository(client: GitHubClient, db: SecurityDB, org: str, repo: Dict,
+                    config: Dict, stats: Dict, spinner: Optional[Spinner]):
     full_name = f"{org}/{repo['name']}"
     try:
         scan_forks(client, db, org, repo, config, stats, spinner)
@@ -556,7 +715,6 @@ def fetch_org_repositories(client: GitHubClient, org: str, spinner: Optional[Spi
 
 def print_stats(stats: Dict):
     width = 50
-
     repos_scanned_spacing = width - 22 - len(str(stats['total']))
     fork_changes_spacing = width - 14 - len(str(stats['fork_changes']))
     dependency_spacing = width - 19 - len(str(stats['dependencies']))
@@ -582,7 +740,8 @@ def print_stats(stats: Dict):
 """)
 
 def save_json_output(file: str, results: Dict, elapsed: float):
-    data = {'scan_time': elapsed, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'statistics': results['stats'], 'organizations': results['organizations']}
+    data = {'scan_time': elapsed, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'statistics': results['stats'], 'organizations': results['organizations']}
     try:
         with open(file, 'w') as f:
             json.dump(data, f, indent=2)
@@ -657,7 +816,8 @@ def main():
     START_TIME = time.time()
     db = SecurityDB(config['database'])
     client = GitHubClient(config['github_tokens'])
-    stats = {'total':0,'fork_changes':0,'dependencies':0,'broken_links':0,'takeovers':0,'sensitive_files':0,'users_checked':0,'links_checked':0,'npm_packages':0,'total_issues':0}
+    stats = {'total':0,'fork_changes':0,'dependencies':0,'broken_links':0,'takeovers':0,
+                 'sensitive_files':0,'users_checked':0,'links_checked':0,'npm_packages':0,'total_issues':0}
     results = {'stats': stats, 'organizations': {}}
 
     for idx, org in enumerate(orgs, 1):
@@ -672,7 +832,7 @@ def main():
         if not repos:
             log('warning', f"No repositories found for {Colors.BOLD}{org}{Colors.RESET}")
             continue
-        log('info', f"Found {Colors.BOLD}{len(repos)}{Colors.RESET} active repository")
+        # log('info', f"Found {Colors.BOLD}{len(repos)}{Colors.RESET} active repository")
         results['organizations'][org] = []
         for r_idx, repo in enumerate(repos, 1):
             if INTERRUPTED:
