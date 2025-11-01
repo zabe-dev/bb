@@ -194,16 +194,16 @@ def run_chaos(domain, output_file):
     return run_command(cmd, output_file, "Running chaos...")
 
 def run_shuffledns(domain, resolvers, wordlist, output_file):
+    if not os.path.exists(resolvers):
+        print(f"[{Colors.RED}ERR{Colors.RESET}] Running shuffledns... Resolvers file not found")
+        return 0
+
     if not os.path.exists(wordlist):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Running shuffledns... Wordlist file not found")
         return 0
 
-    cmd = ["shuffledns", "-d", domain, "-w", wordlist,
+    cmd = ["shuffledns", "-d", domain, "-r", resolvers, "-w", wordlist,
            "-mode", "bruteforce", "-silent", "-o", output_file]
-
-    if resolvers and os.path.exists(resolvers):
-        cmd.extend(["-r", resolvers])
-
     return run_command(cmd, output_file, "Running shuffledns...", timeout=3600)
 
 def run_port_scan(domains_file, resolvers, output_file, width):
@@ -389,8 +389,8 @@ def main():
 
     parser.add_argument("-d", required=True, metavar="example.com", help="Target domain")
     parser.add_argument("-o", required=True, metavar="output/", help="Output directory")
-    parser.add_argument("-sd", action="store_true", help="Run shuffledns bruteforcing")
-    parser.add_argument("-r", metavar="resolvers.txt", help="List of resolvers for dns bruteforcing/port scanning")
+    parser.add_argument("-sd", action="store_true", help="Run dns bruteforcing")
+    parser.add_argument("-r", metavar="resolvers.txt", help="List of resolvers for dns bruteforcing")
     parser.add_argument("-w", metavar="wordlist.txt", help="List of subdomains for dns bruteforcing")
     parser.add_argument("-ps", metavar="WIDTH", help="Run port scanning with width: 100, 1000, or full")
     parser.add_argument("-s", action="store_true", help="Take screenshots")
@@ -400,8 +400,8 @@ def main():
     print_banner()
     START_TIME = time.time()
 
-    if args.sd and not args.w:
-        print(f"[{Colors.RED}ERR{Colors.RESET}] shuffledns requires -w flag")
+    if args.sd and (not args.r or not args.w):
+        print(f"[{Colors.RED}ERR{Colors.RESET}] shuffledns requires -r and -w flags")
         sys.exit(1)
 
     if args.ps and args.ps not in ["100", "1000", "full"]:
