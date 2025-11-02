@@ -185,13 +185,13 @@ def fetch_waymore_urls(target, output_dir):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Error: {e}")
         return [], None
 
-def crawl_with_katana(target, output_dir):
+def crawl_with_katana(target, output_dir, depth=3):
     output_file = f"{output_dir}/katana.txt"
 
-    cmd = ["katana", "-u", target, "-retry", "3", "-jc", "-o", output_file]
+    cmd = ["katana", "-u", target, "-retry", "3", "-jc", "-d", str(depth), "-o", output_file]
 
     try:
-        spinner = Spinner("Crawling target site...")
+        spinner = Spinner(f"Crawling target site (depth: {depth})...")
         spinner.start()
 
         process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
@@ -565,7 +565,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Wayback URL Analyzer')
     parser.add_argument('-d', required=True, metavar="example.com", help='Target domain')
-    parser.add_argument('-output', required=True, metavar="output_dir/",  help='Output directory')
+    parser.add_argument('-output', required=True, metavar="output_dir/", help='Output directory')
+    parser.add_argument('-c', type=int, metavar="depth", help='Enable crawling with specified depth (default: 3)', nargs='?', const=3)
 
     args = parser.parse_args()
 
@@ -580,15 +581,19 @@ def main():
         print(f"[{Colors.RED}ERR{Colors.RESET}] Failed to fetch URLs")
         return
 
-    katana_urls, katana_file = crawl_with_katana(target, output_dir)
+    if args.c is not None:
+        depth = args.c if args.c > 0 else 3
+        katana_urls, katana_file = crawl_with_katana(target, output_dir, depth)
 
-    if katana_urls:
-        all_urls = list(set(urls + katana_urls))
-        combined_file = f"{output_dir}/combined.txt"
-        save_file(combined_file, all_urls)
-        print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs\n")
-        urls = all_urls
-        urls_file = combined_file
+        if katana_urls:
+            all_urls = list(set(urls + katana_urls))
+            combined_file = f"{output_dir}/combined.txt"
+            save_file(combined_file, all_urls)
+            print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs\n")
+            urls = all_urls
+            urls_file = combined_file
+    else:
+        print(f"[{Colors.CYAN}INF{Colors.RESET}] Crawling skipped (use -c to enable)\n")
 
     results = run_automated_analysis(urls, urls_file, target, output_dir)
 
