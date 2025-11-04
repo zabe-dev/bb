@@ -94,8 +94,6 @@ class Config:
     GF_PATTERNS = ["idor", "lfi", "rce", "redirect", "sqli", "ssrf", "ssti", "xss"]
 
     DEFAULT_EXTENSIONS = [".zip", ".tar.gz", ".rar", ".sql", ".bak", ".7z", ".gz"]
-    LISTING_PATTERNS = ["Index of /", "Parent Directory", "Directory listing",
-                       "Last modified", "Name</a>"]
 
 def signal_handler(signum, frame):
     global INTERRUPTED
@@ -342,66 +340,6 @@ def extract_parameters(urls):
 
     return results
 
-def scan_for_listings(urls, subdomains, output_dir, target, threads=10):
-    paths_by_host = {}
-
-    for url in urls:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname or not parsed.path:
-            continue
-
-        clean_path = parsed.path.rstrip('/')
-        if not clean_path or Config.STATIC_EXTENSIONS.search(clean_path):
-            continue
-
-        if hostname not in paths_by_host:
-            paths_by_host[hostname] = set()
-
-        parts = clean_path.split('/')
-        depth = len([p for p in parts if p])
-
-        if depth <= 3:
-            paths_by_host[hostname].add(clean_path)
-
-            for i in range(1, len(parts)):
-                parent = '/'.join(parts[:i+1])
-                if parent:
-                    parent_depth = len([p for p in parent.split('/') if p])
-                    if parent_depth <= 3:
-                        paths_by_host[hostname].add(parent)
-
-    for subdomain in subdomains:
-        if subdomain not in paths_by_host:
-            paths_by_host[subdomain] = set()
-        paths_by_host[subdomain].add('/')
-
-    def check_listing(hostname, path):
-        for scheme in ["https", "http"]:
-            full_url = f"{scheme}://{hostname}{path}" if path == '/' else f"{scheme}://{hostname}{path}/"
-            try:
-                r = requests.get(full_url, timeout=5, headers=Config.HEADERS)
-                if r.status_code == 200 and any(p in r.text for p in Config.LISTING_PATTERNS):
-                    return full_url
-            except:
-                continue
-        return None
-
-    listings = []
-    tasks = [(host, path) for host, paths in paths_by_host.items() for path in paths]
-
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        results = executor.map(lambda x: check_listing(x[0], x[1]), tasks)
-        for result in results:
-            if result:
-                listings.append(result)
-
-    if listings:
-        output_path = f"{output_dir}/dir_listings.txt"
-        save_file(output_path, listings)
-
-    return listings
-
 def find_keyword(urls, keyword):
     matches = [u for u in urls if keyword.lower() in u.lower()]
     return matches
@@ -542,16 +480,6 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
         else:
             print(f"[{Colors.RED}-{Colors.RESET}] {pattern.upper()} patterns: 0 found")
 
-    spinner = Spinner("Scanning for directory listings")
-    spinner.start()
-    listings = scan_for_listings(urls, subdomains, output_dir, target)
-    spinner.stop()
-    results["dir_listings"] = len(listings)
-    if listings:
-        print(f"[{Colors.GREEN}+{Colors.RESET}] Directory listings: {len(listings)} found")
-    else:
-        print(f"[{Colors.RED}-{Colors.RESET}] Directory listings: 0 found")
-
     return results
 
 def print_summary(results, output_dir):
@@ -592,8 +520,6 @@ def main():
             print(f"[{Colors.CYAN}INF{Colors.RESET}] Filtered {len(all_urls)} unique URLs\n")
             urls = all_urls
             urls_file = combined_file
-    else:
-        print(f"[{Colors.CYAN}INF{Colors.RESET}] Crawling skipped (use -c to enable)\n")
 
     results = run_automated_analysis(urls, urls_file, target, output_dir)
 
