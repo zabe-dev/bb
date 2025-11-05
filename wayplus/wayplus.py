@@ -215,7 +215,7 @@ def crawl_with_katana(target, output_dir, depth=3):
         print(f"[{Colors.RED}ERR{Colors.RESET}] Error: {e}")
         return [], None
 
-def gf_pattern_match(urls_file, pattern, output_dir, target):
+def gf_pattern_match(urls_file, pattern, output_dir):
     try:
         output_path = f"{output_dir}/{pattern}.txt"
 
@@ -282,7 +282,7 @@ def check_url_status(url):
     except requests.exceptions.RequestException:
         return None
 
-def analyze_jwts_from_urls(urls, output_dir, target):
+def analyze_jwts_from_urls(urls, output_dir):
     jwt_map = {url: token for url in urls if (token := extract_jwt_from_url(url))}
 
     if not jwt_map:
@@ -344,7 +344,7 @@ def find_keyword(urls, keyword):
     matches = [u for u in urls if keyword.lower() in u.lower()]
     return matches
 
-def extract_secret_urls(urls, output_dir, target):
+def extract_secret_urls(urls, output_dir):
     secret = [url for url in urls if Config.SECRET_PARAMS.search(url)]
 
     if secret:
@@ -353,7 +353,7 @@ def extract_secret_urls(urls, output_dir, target):
 
     return secret
 
-def extract_api_urls(urls, output_dir, target):
+def extract_api_urls(urls, output_dir):
     api_urls = [url for url in urls
                 if Config.API_PATTERNS.search(url) and not Config.STATIC_EXTENSIONS.search(url)]
 
@@ -363,7 +363,7 @@ def extract_api_urls(urls, output_dir, target):
 
     return api_urls
 
-def extract_static_urls(urls, output_dir, target):
+def extract_static_urls(urls, output_dir):
     static_urls = [url for url in urls if Config.STATIC_EXTENSIONS.search(url)]
 
     if static_urls:
@@ -399,7 +399,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
 
     spinner = Spinner("Searching for Secret URLs")
     spinner.start()
-    secret = extract_secret_urls(urls, output_dir, target)
+    secret = extract_secret_urls(urls, output_dir)
     spinner.stop()
     results["secret"] = len(secret)
     if secret:
@@ -409,7 +409,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
 
     spinner = Spinner("Extracting API endpoints")
     spinner.start()
-    apis = extract_api_urls(urls, output_dir, target)
+    apis = extract_api_urls(urls, output_dir)
     spinner.stop()
     results["apis"] = len(apis)
     if apis:
@@ -419,7 +419,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
 
     spinner = Spinner("Extracting static files")
     spinner.start()
-    static_files = extract_static_urls(urls, output_dir, target)
+    static_files = extract_static_urls(urls, output_dir)
     spinner.stop()
     results["static_files"] = len(static_files)
     if static_files:
@@ -451,7 +451,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
 
     spinner = Spinner("Analyzing JWT tokens")
     spinner.start()
-    jwt_count = analyze_jwts_from_urls(urls, output_dir, target)
+    jwt_count = analyze_jwts_from_urls(urls, output_dir)
     spinner.stop()
     results["jwt"] = jwt_count
     if jwt_count:
@@ -472,7 +472,7 @@ def run_automated_analysis(urls, urls_file, target, output_dir):
     for pattern in Config.GF_PATTERNS:
         spinner = Spinner(f"Scanning for {pattern.upper()} patterns")
         spinner.start()
-        matched = gf_pattern_match(urls_file, pattern, output_dir, target)
+        matched = gf_pattern_match(urls_file, pattern, output_dir)
         spinner.stop()
         results[pattern] = len(matched)
         if matched:
