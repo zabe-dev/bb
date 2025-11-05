@@ -182,7 +182,7 @@ def format_repo_type(metadata: Optional[Dict], failed: bool = False) -> str:
 
     return " ".join(badges)
 
-def get_org_repos(org: str, include_forks: bool = True) -> List[Dict]:
+def get_org_repos(org: str, include_forks: bool = True, include_archived: bool = False) -> List[Dict]:
     repos = []
     page = 1
 
@@ -203,6 +203,8 @@ def get_org_repos(org: str, include_forks: bool = True) -> List[Dict]:
             break
 
         for repo in data:
+            if not include_archived and repo.get("archived", False):
+                continue
             if include_forks or not repo.get("fork", False):
                 repo_info = {
                     "url": repo["clone_url"],
@@ -251,7 +253,7 @@ def get_org_members(org: str) -> List[str]:
 
     return list(set(members))
 
-def get_user_repos(username: str, include_forks: bool = True) -> List[Dict]:
+def get_user_repos(username: str, include_forks: bool = True, include_archived: bool = False) -> List[Dict]:
     repos = []
     page = 1
 
@@ -272,6 +274,8 @@ def get_user_repos(username: str, include_forks: bool = True) -> List[Dict]:
             break
 
         for repo in data:
+            if not include_archived and repo.get("archived", False):
+                continue
             if include_forks or not repo.get("fork", False):
                 repo_info = {
                     "url": repo["clone_url"],
@@ -381,6 +385,7 @@ def main():
     parser.add_argument("-repo", help="Single repository URL")
     parser.add_argument("-include-forks", action="store_true", help="Include forked repositories")
     parser.add_argument("-include-members", action="store_true", help="Include organization member repositories (only with -org)")
+    parser.add_argument("-include-archived", action="store_true", help="Include archived repositories")
     parser.add_argument("-output", help="Directory to save TruffleHog results")
     parser.add_argument("-results", choices=["valid", "all"], default="all", help="Filter results: 'valid' for verified secrets only, 'all' for everything")
     parser.add_argument("-silent", action="store_true", help="Only print scan results")
@@ -409,7 +414,7 @@ def main():
     if args.org:
         if not SILENT_MODE:
             print(f"[{Colors.CYAN}INF{Colors.RESET}] Target organization: {Colors.BOLD}{args.org}{Colors.RESET}")
-        org_repos = get_org_repos(args.org, args.include_forks)
+        org_repos = get_org_repos(args.org, args.include_forks, args.include_archived)
         if not SILENT_MODE:
             print(f"[{Colors.CYAN}INF{Colors.RESET}] Found {Colors.BOLD}{len(org_repos)}{Colors.RESET} organization repositories")
         for repo_info in org_repos:
@@ -425,7 +430,7 @@ def main():
             for member in members:
                 if INTERRUPTED:
                     break
-                member_repos = get_user_repos(member, args.include_forks)
+                member_repos = get_user_repos(member, args.include_forks, args.include_archived)
                 if member_repos and not SILENT_MODE:
                     print(f"{Colors.DIM}[*]{Colors.RESET} {member}: {len(member_repos)} repositories")
                 for repo_info in member_repos:
@@ -434,7 +439,7 @@ def main():
     if args.user:
         if not SILENT_MODE:
             print(f"[{Colors.CYAN}INF{Colors.RESET}] Target user: {Colors.BOLD}{args.user}{Colors.RESET}")
-        user_repos = get_user_repos(args.user, args.include_forks)
+        user_repos = get_user_repos(args.user, args.include_forks, args.include_archived)
         if not SILENT_MODE:
             print(f"[{Colors.CYAN}INF{Colors.RESET}] Found {Colors.BOLD}{len(user_repos)}{Colors.RESET} user repositories")
         for repo_info in user_repos:
