@@ -124,7 +124,7 @@ def run_command(cmd, output_file, spinner_msg, timeout=900):
         return 0
 
 def run_subfinder(domain, output_file):
-    cmd = ["subfinder", "-silent", "-all", "-d", domain, "-o", output_file]
+    cmd = ["subfinder", "-silent", "-all", "-recursive", "-d", domain, "-o", output_file]
     return run_command(cmd, output_file, "Running subfinder...")
 
 def run_findomain(domain, output_file):
@@ -275,6 +275,45 @@ def run_screenshots(domains_file, output_dir):
     except Exception as e:
         spinner.stop()
         print(f"[{Colors.RED}ERR{Colors.RESET}] Taking screenshots... {e}")
+        return 0
+
+def extract_wildcards(output_dir, domain):
+    spinner = Spinner("Extracting wildcards...")
+    spinner.start()
+
+    wildcards = set()
+
+    enum_files = [
+        f"{output_dir}/subfinder.txt",
+        f"{output_dir}/findomain.txt",
+        f"{output_dir}/assetfinder.txt",
+        f"{output_dir}/crtsh.txt",
+        f"{output_dir}/chaos.txt",
+        f"{output_dir}/shuffledns.txt"
+    ]
+
+    for file in enum_files:
+        if os.path.exists(file):
+            with open(file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and '*' in line and line != f"*.{domain}":
+                        wildcards.add(line)
+
+    spinner.stop()
+
+    if wildcards:
+        wildcard_file = f"{output_dir}/wildcards.txt"
+        with open(wildcard_file, 'w') as f:
+            for w in sorted(wildcards):
+                clean = w.replace('*.', '')
+                f.write(f"{clean}\n")
+
+        count = len(wildcards)
+        print(f"[{Colors.GREEN}SUC{Colors.RESET}] Extracting wildcards... {count} found")
+        return count
+    else:
+        print(f"[{Colors.CYAN}INF{Colors.RESET}] Extracting wildcards... 0 found")
         return 0
 
 def combine_results(output_dir, domain):
@@ -431,6 +470,8 @@ def main():
             args.w,
             f"{output_dir}/shuffledns.txt"
         )
+
+    results['wildcards'] = extract_wildcards(output_dir, args.d)
 
     total = combine_results(output_dir, args.d)
 

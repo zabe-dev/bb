@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 import atexit
 import json
@@ -75,6 +73,7 @@ def should_label_as_medium(finding_data: Dict) -> bool:
 
 def cleanup():
     global OLD_TERM_SETTINGS
+    show_cursor()
     for temp_dir in TEMP_DIRS:
         if os.path.exists(temp_dir):
             try:
@@ -90,7 +89,7 @@ def cleanup():
 def signal_handler(signum, frame):
     global INTERRUPTED, START_TIME
     INTERRUPTED = True
-    print(f"[{Colors.YELLOW}WRN{Colors.RESET}] Scan interrupted by user")
+    print(f"\n[{Colors.YELLOW}WRN{Colors.RESET}] Scan interrupted by user")
     print(f"[{Colors.YELLOW}WRN{Colors.RESET}] Cleaning up temporary files...")
     cleanup()
     elapsed_time = (time.time() - START_TIME) if START_TIME is not None else 0
@@ -181,6 +180,18 @@ def format_repo_type(metadata: Optional[Dict], failed: bool = False) -> str:
         badges.append(f"[{Colors.RED}disabled{Colors.RESET}]")
 
     return " ".join(badges)
+
+def update_line(text: str):
+    sys.stdout.write(f"\r\033[K{text}")
+    sys.stdout.flush()
+
+def hide_cursor():
+    sys.stdout.write('\033[?25l')
+    sys.stdout.flush()
+
+def show_cursor():
+    sys.stdout.write('\033[?25h')
+    sys.stdout.flush()
 
 def get_org_repos(org: str, include_forks: bool = True, include_archived: bool = False) -> List[Dict]:
     repos = []
@@ -380,78 +391,218 @@ def main():
         pass
 
     parser = argparse.ArgumentParser(description="Fetch Git URLs and scan with TruffleHog")
-    parser.add_argument("-org", help="GitHub organization name")
-    parser.add_argument("-user", help="GitHub username")
-    parser.add_argument("-repo", help="Single repository URL")
+    parser.add_argument("-o", help="GitHub organization name")
+    parser.add_argument("-u", help="GitHub username")
+    parser.add_argument("-r", help="Single repository URL")
     parser.add_argument("-include-forks", action="store_true", help="Include forked repositories")
-    parser.add_argument("-include-members", action="store_true", help="Include organization member repositories (only with -org)")
+    parser.add_argument("-include-members", action="store_true", help="Include organization member repositories")
     parser.add_argument("-include-archived", action="store_true", help="Include archived repositories")
+    parser.add_argument("-only-members", action="store_true", help="Only scan organization member repositories")
+    parser.add_argument("-only-valid", action="store_true", help="Only show verified secrets")
     parser.add_argument("-output", help="Directory to save TruffleHog results")
-    parser.add_argument("-results", choices=["valid", "all"], default="all", help="Filter results: 'valid' for verified secrets only, 'all' for everything")
     parser.add_argument("-silent", action="store_true", help="Only print scan results")
 
     args = parser.parse_args()
 
     SILENT_MODE = args.silent
 
-    if not args.org and not args.repo and not args.user:
+    if not args.o and not args.r and not args.u:
         if not SILENT_MODE:
-            print(f"[{Colors.RED}ERR{Colors.RESET}] Must specify -org, -user, or -repo")
+            print(f"[{Colors.RED}ERR{Colors.RESET}] Must specify -o, -u, or -r")
         sys.exit(1)
 
     print_banner()
 
+    if not SILENT_MODE:
+        hide_cursor()
+
     if not GITHUB_TOKEN and not SILENT_MODE:
         print(f"[{Colors.YELLOW}WRN{Colors.RESET}] GITHUB_TOKEN not set, rate limits may apply")
 
-    only_verified = args.results == "valid"
+    only_verified = args.only_valid
 
     all_repos: Dict[str, Dict] = {}
 
-    if args.repo:
-        all_repos[args.repo] = {"url": args.repo}
-
-    if args.org:
+    if args.r:
         if not SILENT_MODE:
-            print(f"[{Colors.CYAN}INF{Colors.RESET}] Target organization: {Colors.BOLD}{args.org}{Colors.RESET}")
-        org_repos = get_org_repos(args.org, args.include_forks, args.include_archived)
+            update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Repository: {Colors.BOLD}{args.r}{Colors.RESET}")
+        all_repos[args.r] = {"url": args.r}
         if not SILENT_MODE:
-            print(f"[{Colors.CYAN}INF{Colors.RESET}] Found {Colors.BOLD}{len(org_repos)}{Colors.RESET} organization repositories")
-        for repo_info in org_repos:
-            all_repos[repo_info["url"]] = repo_info
+            update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Repository: {Colors.BOLD}{args.r}{Colors.RESET}")
+            print()
 
-        if args.include_members:
-            if not SILENT_MODE:
-                print(f"[{Colors.CYAN}INF{Colors.RESET}] Fetching organization members")
-            members = get_org_members(args.org)
-            if not SILENT_MODE:
-                print(f"[{Colors.CYAN}INF{Colors.RESET}] Found {Colors.BOLD}{len(members)}{Colors.RESET} organization members")
+    if args.o:
+        if not SILENT_MODE:
+            if args.only_members:
+                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organiztion: {Colors.BOLD}{args.o}{Colors.RESET} (members only) | Members: {Colors.BOLD}0{Colors.RESET}")
+            elif args.include_members:
+                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} | Repositories: {Colors.BOLD}0{Colors.RESET} | Members: {Colors.BOLD}0{Colors.RESET}")
+            else:
+                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} | Repositories: {Colors.BOLD}0{Colors.RESET}")
+
+        org_repos = []
+        if not args.only_members:
+            page = 1
+            while True:
+                if INTERRUPTED:
+                    break
+                url = f"https://api.github.com/orgs/{args.o}/repos?per_page=100&page={page}"
+                response = requests.get(url, headers=get_headers())
+                if response.status_code != 200:
+                    if not SILENT_MODE:
+                        print(f"\n[{Colors.RED}ERR{Colors.RESET}] Failed to fetch org repos: {response.status_code}")
+                    break
+                data = response.json()
+                if not data:
+                    break
+                for repo in data:
+                    if not args.include_archived and repo.get("archived", False):
+                        continue
+                    if args.include_forks or not repo.get("fork", False):
+                        repo_info = {
+                            "url": repo["clone_url"],
+                            "fork": repo.get("fork", False),
+                            "private": repo.get("private", False),
+                            "archived": repo.get("archived", False),
+                            "disabled": repo.get("disabled", False)
+                        }
+                        org_repos.append(repo_info)
+                        REPO_METADATA_CACHE[repo["clone_url"]] = {
+                            "fork": repo_info["fork"],
+                            "private": repo_info["private"],
+                            "archived": repo_info["archived"],
+                            "disabled": repo_info["disabled"]
+                        }
+                        if not SILENT_MODE:
+                            if args.include_members:
+                                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} | Repositories: {Colors.BOLD}{len(org_repos)}{Colors.RESET} | Members: {Colors.BOLD}0{Colors.RESET}")
+                            else:
+                                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} | Repositories: {Colors.BOLD}{len(org_repos)}{Colors.RESET}")
+                page += 1
+
+            for repo_info in org_repos:
+                all_repos[repo_info["url"]] = repo_info
+
+        if args.include_members or args.only_members:
+            members = []
+            page = 1
+            while True:
+                if INTERRUPTED:
+                    break
+                url = f"https://api.github.com/orgs/{args.o}/members?per_page=100&page={page}"
+                response = requests.get(url, headers=get_headers())
+                if response.status_code != 200:
+                    if not SILENT_MODE:
+                        print(f"\n[{Colors.RED}ERR{Colors.RESET}] Failed to fetch org members: {response.status_code}")
+                    break
+                data = response.json()
+                if not data:
+                    break
+                for member in data:
+                    if member["login"] not in members:
+                        members.append(member["login"])
+                        if not SILENT_MODE:
+                            if args.only_members:
+                                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} (members only) | Members: {Colors.BOLD}{len(members)}{Colors.RESET}")
+                            else:
+                                update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} | Repositories: {Colors.BOLD}{len(org_repos)}{Colors.RESET} | Members: {Colors.BOLD}{len(members)}{Colors.RESET}")
+                page += 1
 
             for member in members:
                 if INTERRUPTED:
                     break
-                member_repos = get_user_repos(member, args.include_forks, args.include_archived)
-                if member_repos and not SILENT_MODE:
-                    print(f"{Colors.DIM}[*]{Colors.RESET} {member}: {len(member_repos)} repositories")
-                for repo_info in member_repos:
-                    all_repos[repo_info["url"]] = repo_info
+                page = 1
+                while True:
+                    if INTERRUPTED:
+                        break
+                    url = f"https://api.github.com/users/{member}/repos?per_page=100&page={page}"
+                    response = requests.get(url, headers=get_headers())
+                    if response.status_code != 200:
+                        if not SILENT_MODE:
+                            print(f"\n[{Colors.RED}ERR{Colors.RESET}] Failed to fetch repos for {member}: {response.status_code}")
+                        break
+                    data = response.json()
+                    if not data:
+                        break
+                    for repo in data:
+                        if not args.include_archived and repo.get("archived", False):
+                            continue
+                        if args.include_forks or not repo.get("fork", False):
+                            repo_info = {
+                                "url": repo["clone_url"],
+                                "fork": repo.get("fork", False),
+                                "private": repo.get("private", False),
+                                "archived": repo.get("archived", False),
+                                "disabled": repo.get("disabled", False)
+                            }
+                            if repo_info["url"] not in all_repos:
+                                all_repos[repo_info["url"]] = repo_info
+                                REPO_METADATA_CACHE[repo["clone_url"]] = {
+                                    "fork": repo_info["fork"],
+                                    "private": repo_info["private"],
+                                    "archived": repo_info["archived"],
+                                    "disabled": repo_info["disabled"]
+                                }
+                                if not SILENT_MODE:
+                                    if args.only_members:
+                                        update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} (members only) | Repositories: {Colors.BOLD}{len(all_repos)}{Colors.RESET}")
+                                    else:
+                                        update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Organization: {Colors.BOLD}{args.o}{Colors.RESET} | Repositories: {Colors.BOLD}{len(all_repos)}{Colors.RESET} | Members: {Colors.BOLD}{len(members)}{Colors.RESET}")
+                    page += 1
 
-    if args.user:
         if not SILENT_MODE:
-            print(f"[{Colors.CYAN}INF{Colors.RESET}] Target user: {Colors.BOLD}{args.user}{Colors.RESET}")
-        user_repos = get_user_repos(args.user, args.include_forks, args.include_archived)
+            print()
+
+    if args.u:
         if not SILENT_MODE:
-            print(f"[{Colors.CYAN}INF{Colors.RESET}] Found {Colors.BOLD}{len(user_repos)}{Colors.RESET} user repositories")
+            update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Username: {Colors.BOLD}{args.u}{Colors.RESET} | Repositories: {Colors.BOLD}0{Colors.RESET}")
+
+        user_repos = []
+        page = 1
+        while True:
+            if INTERRUPTED:
+                break
+            url = f"https://api.github.com/users/{args.u}/repos?per_page=100&page={page}"
+            response = requests.get(url, headers=get_headers())
+            if response.status_code != 200:
+                if not SILENT_MODE:
+                    print(f"\n[{Colors.RED}ERR{Colors.RESET}] Failed to fetch repos for {args.u}: {response.status_code}")
+                break
+            data = response.json()
+            if not data:
+                break
+            for repo in data:
+                if not args.include_archived and repo.get("archived", False):
+                    continue
+                if args.include_forks or not repo.get("fork", False):
+                    repo_info = {
+                        "url": repo["clone_url"],
+                        "fork": repo.get("fork", False),
+                        "private": repo.get("private", False),
+                        "archived": repo.get("archived", False),
+                        "disabled": repo.get("disabled", False)
+                    }
+                    user_repos.append(repo_info)
+                    REPO_METADATA_CACHE[repo["clone_url"]] = {
+                        "fork": repo_info["fork"],
+                        "private": repo_info["private"],
+                        "archived": repo_info["archived"],
+                        "disabled": repo_info["disabled"]
+                    }
+                    if not SILENT_MODE:
+                        update_line(f"[{Colors.CYAN}INF{Colors.RESET}] Username: {Colors.BOLD}{args.u}{Colors.RESET} | Repositories: {Colors.BOLD}{len(user_repos)}{Colors.RESET}")
+            page += 1
+
         for repo_info in user_repos:
             all_repos[repo_info["url"]] = repo_info
+
+        if not SILENT_MODE:
+            print()
 
     if INTERRUPTED:
         sys.exit(130)
 
     all_repos_list = sorted(list(all_repos.keys()))
-
-    if not SILENT_MODE:
-        print(f"[{Colors.CYAN}INF{Colors.RESET}] Starting scan of {Colors.BOLD}{len(all_repos_list)}{Colors.RESET} repositories")
 
     START_TIME = time.time()
 
